@@ -261,3 +261,5 @@ progress::-webkit-progress-bar { background:var(--border); } progress::-webkit-p
 .stats-list-row strong { display:block; font-size:13px; }
 .stats-list-row p { margin-top:4px; font-size:11px; line-height:1.5; color:var(--muted-foreground); }
 .stats-list-count { flex-shrink:0; max-width:46%; text-align:right; font-size:11px; font-weight:600; color:var(--primary); }
+
+.reservation-status { border:1px solid var(--border); border-radius:5px; padding:3px 5px; background:var(--background); font-size:10px; max-width:112px; }
