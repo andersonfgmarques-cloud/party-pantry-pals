@@ -69,8 +69,19 @@ export function PartyList() {
   const configuredDates = data.event.party_dates?.length ? [...data.event.party_dates].sort() : data.event.party_date ? [data.event.party_date] : [];
   const startDate = configuredDates[0] ? new Date(`${configuredDates[0]}T12:00:00`) : null;
   const endDate = configuredDates.at(-1) ? new Date(`${configuredDates.at(-1)}T12:00:00`) : startDate;
-  const dateFmt = (date: Date, year = true) => date.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', ...(year ? { year: 'numeric' } : {}) });
-  const dateLabel = configuredDates.length ? configuredDates.map(value => dateFmt(new Date(`${value}T12:00:00`), false)).join(', ') + ` de ${new Date(`${configuredDates[0]}T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}` : 'Data a definir';
+  const dateFmt = (date: Date, options: Intl.DateTimeFormatOptions = {}) => date.toLocaleDateString('pt-BR', options);
+  const dateLabel = (() => {
+    if (!configuredDates.length) return 'Data a definir';
+    const dates = configuredDates.map(value => new Date(value + 'T12:00:00'));
+    const sameMonth = dates.every(date => date.getMonth() === dates[0]!.getMonth() && date.getFullYear() === dates[0]!.getFullYear());
+    if (sameMonth) {
+      const days = dates.map(date => dateFmt(date, { day: 'numeric' }));
+      const dayList = days.length === 1 ? days[0]! : days.length === 2 ? days.join(' e ') : days.slice(0, -1).join(', ') + ' e ' + days[days.length - 1]!;
+      return dayList + ' de ' + dateFmt(dates[0]!, { month: 'long', year: 'numeric' });
+    }
+    const sameYear = dates.every(date => date.getFullYear() === dates[0]!.getFullYear());
+    return dates.map((date, index) => dateFmt(date, { day: 'numeric', month: 'long', ...(!sameYear || index === dates.length - 1 ? { year: 'numeric' as const } : {}) })).join(', ');
+  })();
   const daysUntilParty = configuredDates[0] ? Math.ceil((new Date(`${configuredDates[0]}T00:00:00`).getTime() - new Date(new Date().toDateString()).getTime()) / 86400000) : null;
   const countdownLabel = daysUntilParty === null ? 'Data a definir' : daysUntilParty < 0 ? 'Evento já realizado' : daysUntilParty === 0 ? 'É hoje!' : `Faltam ${daysUntilParty} dias`;
   const visible = data.products.filter(p => (!category || p.category_id === category) && p.name.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR')) && (view !== 'mine' || data.reservations.some(r => r.product_id === p.id && r.participant_id === person?.id)) && (status === 'all' || status === itemStatus(p, reservedFor(p.id, data.reservations))));
