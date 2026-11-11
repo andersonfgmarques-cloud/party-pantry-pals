@@ -4,47 +4,51 @@ Aplicação colaborativa para organizar a lista de contribuições de uma festa.
 
 ## Arquitetura independente
 
-- **Aplicação:** TanStack Start + React + Vite.
+- **Aplicação:** TanStack Start + React + Vite + Nitro.
 - **Código e automação:** GitHub.
 - **Banco e tempo real:** Supabase.
-- **Hospedagem da aplicação:** Render (configuração versionada em `render.yaml`).
+- **Hospedagem gratuita:** Cloudflare Workers (plano Free, sujeito aos limites vigentes da plataforma).
 - **Pacotes:** Bun, com dependências registradas em `bun.lock`.
 
-O projeto não precisa do editor, do gateway ou do ambiente de execução do Lovable para instalar dependências, desenvolver, testar, compilar ou hospedar a aplicação. O Supabase continua sendo um serviço separado e deve permanecer configurado com o mesmo projeto para preservar os dados existentes.
-
-## Requisitos
-
-- Bun (versão compatível com o lockfile).
-- Node.js 22 ou superior para execução de produção.
-- Um projeto Supabase com o esquema e as políticas já utilizados pela aplicação.
+A aplicação mantém o Supabase existente. A publicação não executa migrations, não apaga tabelas e não altera os dados da festa. O projeto não depende do editor nem do runtime do Lovable.
 
 ## Desenvolvimento local
+
+Requisitos: Bun e Node.js 22 ou superior.
 
 ```bash
 git clone https://github.com/andersonfgmarques-cloud/party-pantry-pals.git
 cd party-pantry-pals
 bun install --frozen-lockfile
 cp .env.example .env
-```
-
-Preencha o arquivo `.env` com as credenciais do seu projeto Supabase e uma senha forte para o organizador. Em seguida:
-
-```bash
 bun run dev
 ```
 
-## Variáveis de ambiente
+Preencha o `.env` com as variáveis do seu projeto Supabase e uma senha forte para o organizador.
 
-| Variável | Uso |
+## Publicação gratuita pelo GitHub Actions
+
+O workflow `Deploy Cloudflare Workers` é manual. Para usá-lo:
+
+1. Crie uma conta gratuita na Cloudflare e habilite um subdomínio `workers.dev`.
+2. No painel Cloudflare, crie um API Token com permissões de editar Workers e consultar a conta.
+3. No GitHub, abra **Settings → Secrets and variables → Actions → New repository secret**.
+4. Cadastre estes seis secrets:
+
+| Nome | Conteúdo |
 | --- | --- |
-| `SUPABASE_URL` | URL do projeto Supabase no servidor |
-| `SUPABASE_PUBLISHABLE_KEY` | Chave publicável do Supabase no servidor |
-| `SUPABASE_SERVICE_ROLE_KEY` | Chave privilegiada, somente no servidor |
+| `CLOUDFLARE_API_TOKEN` | Token de API da Cloudflare |
+| `CLOUDFLARE_ACCOUNT_ID` | ID da conta Cloudflare |
+| `SUPABASE_URL` | URL do projeto Supabase já utilizado pela aplicação |
+| `SUPABASE_PUBLISHABLE_KEY` | Chave publicável do mesmo projeto |
+| `SUPABASE_SERVICE_ROLE_KEY` | Chave service_role/secret, somente no servidor |
 | `ORGANIZER_PASSWORD` | Senha da área administrativa |
-| `VITE_SUPABASE_URL` | URL pública do Supabase incorporada ao cliente |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Chave publicável incorporada ao cliente |
 
-As variáveis `VITE_*` são entregues ao navegador. Use nelas somente a URL e a chave publicável. Nunca use uma chave `service_role` ou `sb_secret_*` com prefixo `VITE_`.
+5. Em **Actions**, selecione **Deploy Cloudflare Workers** e clique em **Run workflow**.
+
+O workflow compila a aplicação para Cloudflare Workers, publica o serviço e configura os quatro segredos de servidor no Worker. A URL pública será exibida no resumo da execução, no formato `https://party-pantry-pals.<seu-subdominio>.workers.dev`.
+
+As variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` são preenchidas durante a compilação a partir dos secrets `SUPABASE_URL` e `SUPABASE_PUBLISHABLE_KEY`. Somente a chave publicável é enviada ao navegador. A chave de serviço e a senha do organizador nunca devem receber prefixo `VITE_`.
 
 ## Verificações
 
@@ -55,19 +59,11 @@ bun run typecheck
 bun run build
 ```
 
-O GitHub Actions valida os módulos independentes de configuração/telemetria com ESLint e executa testes, verificação de tipos e build em cada push e pull request. O lint global anterior apontava centenas de problemas de formatação preexistentes em arquivos não alterados; por isso, a verificação foi delimitada aos módulos novos e ajustados nesta etapa.
-
-## Publicação independente no Render
-
-1. Importe este repositório no Render usando o Blueprint `render.yaml`.
-2. Configure os valores de Supabase e `ORGANIZER_PASSWORD` nos Environment Variables do serviço.
-3. O Blueprint executa `bun install --frozen-lockfile && bun run build` e inicia `node .output/server/index.mjs`.
-4. O serviço usa o preset Nitro `render-com`; o Render fornece a porta HTTP.
-
-A publicação da aplicação não executa migrations, não limpa tabelas e não altera os dados da festa. O banco Supabase existente continua sendo usado.
+O workflow de CI executa lint, testes, verificação de tipos e build em cada push e pull request.
 
 ## Segurança operacional
 
-- Mantenha `.env` fora do Git; use `.env.example` apenas como modelo.
-- A chave de serviço do Supabase e a senha do organizador devem ser configuradas como segredos no provedor de hospedagem.
-- Faça mudanças de banco separadamente, com revisão e confirmação do projeto de destino.
+- Nunca envie `.env`, tokens ou chaves privadas ao GitHub.
+- Não coloque `SUPABASE_SERVICE_ROLE_KEY` ou `ORGANIZER_PASSWORD` em variáveis `VITE_*`.
+- Use o mesmo projeto Supabase que contém os dados existentes; não crie outro projeto nem rode migrations para esta publicação.
+- O plano gratuito tem limites de uso e pode mudar conforme as condições da Cloudflare e do Supabase.
