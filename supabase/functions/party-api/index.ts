@@ -192,8 +192,11 @@ Deno.serve(async (req) => {
       }
       return json({ ok: true });
     } else if (action === "event") {
-      if (body.date && body.endDate && body.endDate < body.date) return json({ error: "A data final não pode ser anterior à data inicial." }, 400);
-      result = await db.from("party_event").update({ party_date: body.date ?? null, party_end_date: body.endDate ?? null, guests: body.guests ?? null }).eq("id", 1);
+      const dates = Array.isArray(body.dates)
+        ? [...new Set(body.dates.filter((value): value is string => typeof value === "string" && /^\\d{4}-\\d{2}-\\d{2}$/.test(value)))].sort()
+        : body.date ? [body.date] : [];
+      if (dates.length > 90 || (Array.isArray(body.dates) && dates.length !== body.dates.length)) return json({ error: "Selecione até 90 datas válidas, sem repetição." }, 400);
+      result = await db.from("party_event").update({ party_dates: dates, party_date: dates[0] ?? null, party_end_date: dates.at(-1) ?? null, guests: body.guests ?? null }).eq("id", 1);
     } else {
       return json({ error: "Ação não reconhecida." }, 400);
     }
