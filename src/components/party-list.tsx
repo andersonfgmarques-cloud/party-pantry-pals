@@ -66,6 +66,43 @@ export function PartyList() {
     <header className="site-header"><div className="party-container flex h-full items-center justify-between gap-4"><div className="flex items-center gap-10"><div className="flex items-center gap-3"><span className="brand-mark"><TreePine size={22}/></span><span className="brand-name">Festa na Chácara<span className="text-primary">.</span></span></div><nav className="header-nav" aria-label="Navegação principal"><Button className={`nav-button ${view === 'all' ? 'active' : ''}`} variant="ghost" onClick={() => setView('all')}>Lista da festa</Button><Button className={`nav-button ${view === 'mine' ? 'active' : ''}`} variant="ghost" onClick={() => setView('mine')}>Minhas contribuições</Button></nav></div><Button variant="ghost" size="sm" aria-label={person ? person.name : 'Participar'} onClick={() => { setPendingModal(null); setModal('identity'); }}><span className="initial">{person ? person.name.slice(0,1).toUpperCase() : <Users size={12}/>}</span><span className="hidden sm:inline">{person ? person.name : 'Participar'}</span><ArrowUpRight size={14}/></Button></div></header>
     <section className="party-hero"><img src={garden} alt="Mesa ao ar livre em uma chácara ensolarada" width={1920} height={640}/><div className="party-container hero-content"><span className="hero-eyebrow"><Leaf size={12}/> Todo mundo junto</span><h1>Festa na Chácara</h1><p>Boa companhia, comida gostosa e uma festa feita por todos.</p><div className="hero-meta"><span><CalendarDays size={16}/>{dateLabel}</span><span><Users size={16}/>{data.event.guests ? `${data.event.guests} convidados` : 'Família e amigos'}</span><span><Heart size={15}/> Cada contribuição faz a diferença</span></div></div></section>
     <main className="party-container"><section className="overview"><div className="overview-top"><div className="overview-title">Nossa festa está tomando forma <span className="text-primary">· {progress}%</span></div><span className="live-label"><span className="live-dot"/>{online ? 'Lista compartilhada' : 'Sem conexão'}</span></div><div className="progress-track"><progress value={progress} max={100} aria-label="Progresso da organização"/></div><div className="stat-grid"><div className="stat"><span className="stat-icon"><ClipboardList size={20}/></span><div><strong>{total}</strong><small>Itens na lista</small></div></div><div className="stat"><span className="stat-icon assumed"><CheckCheck size={20}/></span><div><strong>{assumed}</strong><small>Itens assumidos</small></div></div><div className="stat"><span className="stat-icon waiting"><ShoppingBag size={20}/></span><div><strong>{total-assumed}</strong><small>Ainda disponíveis</small></div></div><div className="stat"><span className="stat-icon people"><Users size={20}/></span><div><strong>{people}</strong><small>Pessoas contribuindo</small></div></div></div></section>
+    <section className="participants-overview mt-8 mb-10">
+      <div className="section-heading">
+        <div>
+          <h2>Quem vai levar o quê?</h2>
+          <p>As contribuições aparecem aqui automaticamente conforme cada pessoa escolhe um item.</p>
+        </div>
+        <span className="live-label"><span className="live-dot"/>{people} {people === 1 ? 'pessoa contribuindo' : 'pessoas contribuindo'}</span>
+      </div>
+      {data.reservations.length ? (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from(new Set(data.reservations.map(r => r.participant_id))).map(participantId => {
+            const entries = data.reservations.filter(r => r.participant_id === participantId);
+            const participantName = entries[0]?.participant_name ?? 'Participante';
+            return <article className="rounded-xl border border-border bg-card p-4 shadow-sm" key={participantId}>
+              <div className="mb-3 flex items-center gap-2">
+                <span className="initial">{participantName.slice(0,1).toUpperCase()}</span>
+                <strong>{participantName}</strong>
+              </div>
+              <div className="space-y-2">
+                {entries.map(r => {
+                  const product = data.products.find(p => p.id === r.product_id);
+                  return <div className="flex items-start justify-between gap-3 border-t border-border pt-2 text-sm" key={r.id}>
+                    <span className="font-medium">{product?.name ?? 'Item da lista'}</span>
+                    <span className="shrink-0 text-muted-foreground">{number(Number(r.quantity))} {product?.unit ?? ''}</span>
+                  </div>;
+                })}
+              </div>
+            </article>;
+          })}
+        </div>
+      ) : (
+        <div className="empty-state rounded-xl border border-dashed border-border py-8">
+          <Users size={28} className="mx-auto mb-3"/>
+          <p>Ninguém assumiu um item ainda. Quando alguém confirmar uma contribuição, o nome e o item aparecerão aqui.</p>
+        </div>
+      )}
+    </section>
     <section className="list-section"><div className="section-heading"><div><h2>{view === 'mine' ? 'Minhas contribuições' : 'O que vamos levar?'}</h2><p>{view === 'mine' ? person ? `Tudo que você combinou de levar, ${person.name}.` : 'Informe seu nome para ver suas contribuições.' : 'Escolha um item e faça parte dessa festa.'}</p></div><div className="list-actions"><Button variant="outline" onClick={() => share()}><Share2 size={15}/>Compartilhar lista</Button><Button onClick={() => open('add')}><Plus size={16}/>Adicionar item</Button></div></div>
     <div className="filter-row"><label className="search-box"><Search size={17}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar um item..." aria-label="Buscar um item"/></label><div className="category-filters"><Button variant="ghost" className={`filter-button ${category === 0 ? 'active' : ''}`} onClick={() => setCategory(0)}>Todos os itens</Button>{data.categories.map(c => <Button key={c.id} variant="ghost" className={`filter-button ${category === c.id ? 'active' : ''}`} onClick={() => setCategory(c.id)}>{c.name === 'Bebidas e descartáveis' ? 'Bebidas e outros' : c.name === 'Carnes e complementos' ? 'Carnes' : c.name}</Button>)}</div><select aria-label="Filtrar por status" className="bg-transparent text-xs text-muted-foreground max-w-36" value={status} onChange={e => setStatus(e.target.value)}><option value="all">Todos os status</option><option value="available">Disponíveis</option><option value="partial">Parciais</option><option value="complete">Completos</option><option value="received">Recebidos</option></select></div>
     <div className="sm:hidden flex gap-2 mb-5"><Button variant={view === 'all' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('all')}>Lista da festa</Button><Button variant={view === 'mine' ? 'secondary' : 'ghost'} size="sm" onClick={() => setView('mine')}>Minhas contribuições</Button></div>
