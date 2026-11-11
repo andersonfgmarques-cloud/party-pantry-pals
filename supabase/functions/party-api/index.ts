@@ -64,12 +64,25 @@ Deno.serve(async (req) => {
         participant = data;
       }
       if (!participant) return json({ error: "Selecione um participante." }, 400);
-      result = await db.from("party_reservations").insert({ product_id: body.id, participant_id: participant.id, participant_name: participant.name, quantity: body.quantity, source: body.source });
+      const { data: reservationId, error: reserveError } = await db.rpc("reserve_party_item", { p_product_id: body.id, p_participant_id: participant.id, p_participant_name: participant.name, p_quantity: body.quantity, p_source: body.source });
+      if (reserveError) return json({ error: reserveError.message.includes("INSUFFICIENT_QUANTITY") ? "Essa quantidade acabou de ser reservada por outra pessoa. Atualize a lista e tente novamente." : "Não foi possível reservar esse item." }, 409);
+      result = { error: null, data: reservationId };
     } else if (action === "cancel") {
       if (!uuid(body.id)) return json({ error: "Reserva não encontrada." }, 400);
       const { data: row } = await db.from("party_reservations").select("participant_id").eq("id", body.id).single();
       if (!row || (!admin && row.participant_id !== participant?.id)) return json({ error: "Você só pode cancelar suas próprias reservas." }, 403);
       result = await db.from("party_reservations").delete().eq("id", body.id);
+    } else if (action === "reservation_status") {
+      if (!uuid(body.id) || !["planned","purchased","at_home","delivered"].includes(body.status)) return json({ error: "Situação inválida." }, 400);
+      const { data: row } = await db.from("party_reservations").select("participant_id").eq("id", body.id).single();
+      if (!row || (!admin && row.participant_id !== participant?.id)) return json({ error: "Você só pode atualizar sua própria contribuição." }, 403);
+      result = await db.from("party_reservations").update({ status: body.status }).eq("id", body.id);
+    } else if (action === "expense_add") {
+      if (!admin || !str(body.description, 120) || !Number.isFinite(body.amount) || body.amount <= 0 || !str(body.paidBy, 60)) return json({ error: "Informe descrição, valor e responsável pelo pagamento." }, 400);
+      result = await db.from("party_expenses").insert({ description: body.description.trim(), amount: body.amount, paid_by: body.paidBy.trim() });
+    } else if (action === "expense_delete") {
+      if (!admin || !uuid(body.id)) return json({ error: "Ação exclusiva do organizador." }, 403);
+      result = await db.from("party_expenses").delete().eq("id", body.id);
     } else if (action === "edit") {
       if (!uuid(body.id) || !str(body.name, 100) || !Number.isInteger(body.categoryId) || !str(body.unit, 20)) return json({ error: "Preencha os campos do item." }, 400);
       result = await db.from("party_products").update({ name: body.name.trim(), category_id: body.categoryId, quantity: body.quantity ?? null, unit: body.unit, note: body.note ?? null }).eq("id", body.id);
