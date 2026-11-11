@@ -52,6 +52,7 @@ export type Database = {
           name: string
           party_date: string | null
           party_end_date: string | null
+          party_dates: string[]
         }
         Insert: {
           guests?: number | null
@@ -59,6 +60,7 @@ export type Database = {
           name?: string
           party_date?: string | null
           party_end_date?: string | null
+          party_dates?: string[]
         }
         Update: {
           guests?: number | null
