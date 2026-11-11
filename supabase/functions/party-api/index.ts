@@ -157,7 +157,8 @@ Deno.serve(async (req) => {
       if (!uuid(body.id) || typeof body.received !== "boolean") return json({ error: "Item não encontrado." }, 400);
       result = await db.from("party_products").update({ received: body.received }).eq("id", body.id);
     } else if (action === "event") {
-      result = await db.from("party_event").update({ party_date: body.date ?? null, guests: body.guests ?? null }).eq("id", 1);
+      if (body.date && body.endDate && body.endDate < body.date) return json({ error: "A data final não pode ser anterior à data inicial." }, 400);
+      result = await db.from("party_event").update({ party_date: body.date ?? null, party_end_date: body.endDate ?? null, guests: body.guests ?? null }).eq("id", 1);
     } else {
       return json({ error: "Ação não reconhecida." }, 400);
     }
