@@ -5,12 +5,10 @@ import {
   createRootRouteWithContext,
   useRouter,
   HeadContent,
-  Scripts,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect } from "react";
 
-import appCss from "../styles.css?url";
 import { reportAppError } from "../lib/error-reporting";
 import { Toaster } from 'sonner';
 
@@ -84,43 +82,22 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Festa na Chácara" },
       { name: "description", content: "Uma festa feita por todos. Organize e compartilhe a lista de contribuições." },
-      { name: "author", content: "Lovable" },
       { property: "og:title", content: "Festa na Chácara" },
       { property: "og:description", content: "Organize a festa e participe da lista compartilhada." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: import.meta.env.BASE_URL + "favicon.ico", type: "image/x-icon" },
       { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;650;700;750&display=swap' },
-      { rel: 'manifest', href: '/manifest.webmanifest' },
-      { rel: 'apple-touch-icon', href: '/party-icon-192.png' },
+      { rel: 'manifest', href: import.meta.env.BASE_URL + 'manifest.webmanifest' },
+      { rel: 'apple-touch-icon', href: import.meta.env.BASE_URL + 'party-icon-192.png' },
     ],
   }),
-  shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,
 });
-
-function RootShell({ children }: { children: ReactNode }) {
-  return (
-    <html lang="pt-BR">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  );
-}
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
@@ -128,6 +105,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+      <HeadContent />
       <Outlet />
       <Toaster position="top-center" richColors />
     </QueryClientProvider>
