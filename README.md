@@ -28,7 +28,7 @@ Preencha o `.env` com as variáveis do seu projeto Supabase e uma senha forte pa
 
 ## Publicação gratuita pelo GitHub Actions
 
-O workflow `Deploy Cloudflare Workers` é manual. Para usá-lo:
+O workflow `Deploy Cloudflare Workers` tem duas etapas visíveis, **build** e **deploy**, no mesmo estilo do workflow do seu projeto InglesSpeak. Ele é executado automaticamente quando há push na branch `main` e também pode ser iniciado manualmente em **Actions → Deploy Cloudflare Workers → Run workflow**.
 
 1. Crie uma conta gratuita na Cloudflare e habilite um subdomínio `workers.dev`.
 2. No painel Cloudflare, crie um API Token com permissões de editar Workers e consultar a conta.
