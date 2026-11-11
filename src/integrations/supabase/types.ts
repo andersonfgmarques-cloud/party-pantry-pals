@@ -14,7 +14,152 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      party_categories: {
+        Row: {
+          icon: string
+          id: number
+          name: string
+        }
+        Insert: {
+          icon: string
+          id: number
+          name: string
+        }
+        Update: {
+          icon?: string
+          id?: number
+          name?: string
+        }
+        Relationships: []
+      }
+      party_event: {
+        Row: {
+          guests: number | null
+          id: number
+          name: string
+          party_date: string | null
+        }
+        Insert: {
+          guests?: number | null
+          id?: number
+          name?: string
+          party_date?: string | null
+        }
+        Update: {
+          guests?: number | null
+          id?: number
+          name?: string
+          party_date?: string | null
+        }
+        Relationships: []
+      }
+      party_participants: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          token_hash: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          token_hash: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          token_hash?: string
+        }
+        Relationships: []
+      }
+      party_products: {
+        Row: {
+          category_id: number
+          created_at: string
+          id: string
+          name: string
+          note: string | null
+          quantity: number | null
+          received: boolean
+          unit: string
+        }
+        Insert: {
+          category_id: number
+          created_at?: string
+          id?: string
+          name: string
+          note?: string | null
+          quantity?: number | null
+          received?: boolean
+          unit?: string
+        }
+        Update: {
+          category_id?: number
+          created_at?: string
+          id?: string
+          name?: string
+          note?: string | null
+          quantity?: number | null
+          received?: boolean
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "party_products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "party_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      party_reservations: {
+        Row: {
+          created_at: string | null
+          id: string
+          participant_id: string
+          participant_name: string
+          product_id: string
+          quantity: number
+          source: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          participant_id: string
+          participant_name: string
+          product_id: string
+          quantity: number
+          source: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          participant_id?: string
+          participant_name?: string
+          product_id?: string
+          quantity?: number
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "party_reservations_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "party_participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "party_reservations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "party_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
