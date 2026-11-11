@@ -121,14 +121,14 @@ Deno.serve(async (req) => {
       await notifyParticipants(db, participant.id, "Nova contribuição na festa", `${participant.name} assumiu ${body.quantity} ${product?.unit ?? ""} de ${product?.name ?? "um item"}.`, "reservation");
     } else if (action === "cancel") {
       if (!uuid(body.id)) return json({ error: "Reserva não encontrada." }, 400);
-      const { data: row } = await db.from("party_reservations").select("participant_id").eq("id", body.id).single();
+      const { data: row } = await db.from("party_reservations").select("participant_id,product_id").eq("id", body.id).single();
       if (!row || (!admin && row.participant_id !== participant?.id)) return json({ error: "Você só pode cancelar suas próprias reservas." }, 403);
       const { data: product } = await db.from("party_products").select("name").eq("id", row.product_id).single();
       result = await db.from("party_reservations").delete().eq("id", body.id);
       if (!result.error) await notifyParticipants(db, participant?.id ?? null, "Contribuição liberada", `Uma contribuição de ${product?.name ?? "um item"} foi cancelada e voltou a ficar disponível.`, "cancellation");
     } else if (action === "adjust_reservation") {
       if (!uuid(body.id) || !Number.isFinite(body.quantity) || body.quantity <= 0) return json({ error: "Informe uma quantidade válida." }, 400);
-      const { data: row } = await db.from("party_reservations").select("participant_id,quantity").eq("id", body.id).single();
+      const { data: row } = await db.from("party_reservations").select("participant_id,quantity,product_id").eq("id", body.id).single();
       if (!row || (!admin && row.participant_id !== participant?.id)) return json({ error: "Você só pode ajustar suas próprias contribuições." }, 403);
       if (body.quantity >= Number(row.quantity)) return json({ error: "A nova quantidade precisa ser menor que a quantidade atual." }, 400);
       const { data: released, error: adjustError } = await db.rpc("update_party_reservation_quantity", { p_reservation_id: body.id, p_quantity: body.quantity });
