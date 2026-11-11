@@ -15,6 +15,28 @@ async function sha256(value: string) {
 }
 const uuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const str = (value: unknown, max: number) => typeof value === "string" && value.trim().length > 0 && value.length <= max;
+
+const VAPID_PUBLIC_KEY = "BNwAcnrXDPuMJBu63N2ZIsXfYuxDMEs-ka6NcDvRHv9WCpV64ulBowK2Q7IB10dJHQWw1lBA23PL9E2pFDhrjyo";
+async function notifyParticipants(db: ReturnType<typeof createClient>, actorId: string | null, title: string, body: string, kind: "reservation" | "adjustment" | "cancellation" | "reminder" | "event") {
+  const { data: people } = await db.from("party_participants").select("id");
+  const recipients = (people ?? []).filter((person) => person.id !== actorId);
+  if (!recipients.length) return;
+  await db.from("party_notifications").insert(recipients.map((person) => ({ participant_id: person.id, title, body, kind })));
+  const privateKey = Deno.env.get("VAPID_PRIVATE_KEY");
+  if (!privateKey) return;
+  const { default: webpush } = await import("npm:web-push@3.6.7");
+  webpush.setVapidDetails("mailto:contato@party-pantry-pals.app", VAPID_PUBLIC_KEY, privateKey);
+  const { data: subscriptions } = await db.from("party_push_subscriptions").select("id,subscription").in("participant_id", recipients.map((person) => person.id));
+  await Promise.all((subscriptions ?? []).map(async (row) => {
+    try {
+      await webpush.sendNotification(row.subscription, JSON.stringify({ title, body, url: "./" }));
+    } catch (error) {
+      const status = (error as { statusCode?: number })?.statusCode;
+      if (status === 404 || status === 410) await db.from("party_push_subscriptions").delete().eq("id", row.id);
+      else console.error("Push delivery failed", status ?? "unknown");
+    }
+  }));
+}
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "Método não permitido." }, 405);
@@ -36,6 +58,34 @@ Deno.serve(async (req) => {
       const { data, error } = await db.from("party_participants").select("id,name,created_at").order("name");
       if (error) throw error;
       return json({ ok: true, participants: data ?? [] });
+    }
+    if (action === "push_config") return json({ publicKey: VAPID_PUBLIC_KEY });
+    if (action === "push_subscribe" || action === "push_unsubscribe" || action === "notifications" || action === "notification_read") {
+      if (!uuid(body.token)) return json({ error: "Identificação do participante inválida." }, 401);
+      const { data: owner } = await db.from("party_participants").select("id").eq("token_hash", await sha256(body.token)).single();
+      if (!owner) return json({ error: "Participante não encontrado." }, 401);
+      if (action === "push_subscribe") {
+        const subscription = body.subscription;
+        if (!subscription || typeof subscription.endpoint !== "string" || !subscription.endpoint.startsWith("https://") || !subscription.keys?.p256dh || !subscription.keys?.auth) return json({ error: "Assinatura de notificações inválida." }, 400);
+        const { error } = await db.from("party_push_subscriptions").upsert({ participant_id: owner.id, endpoint: subscription.endpoint, subscription }, { onConflict: "endpoint" });
+        if (error) throw error;
+        return json({ ok: true });
+      }
+      if (action === "push_unsubscribe") {
+        if (typeof body.endpoint !== "string") return json({ error: "Dispositivo inválido." }, 400);
+        const { error } = await db.from("party_push_subscriptions").delete().eq("participant_id", owner.id).eq("endpoint", body.endpoint);
+        if (error) throw error;
+        return json({ ok: true });
+      }
+      if (action === "notifications") {
+        const { data, error } = await db.from("party_notifications").select("id,title,body,kind,created_at,read_at").eq("participant_id", owner.id).order("created_at", { ascending: false }).limit(30);
+        if (error) throw error;
+        return json({ notifications: data ?? [] });
+      }
+      if (!uuid(body.id)) return json({ error: "Notificação inválida." }, 400);
+      const { error } = await db.from("party_notifications").update({ read_at: new Date().toISOString() }).eq("id", body.id).eq("participant_id", owner.id);
+      if (error) throw error;
+      return json({ ok: true });
     }
     const admin = typeof body.password === "string" && body.password === organizerPassword;
     const adminActions = ["edit", "delete", "received", "event", "verify", "participants"];
@@ -67,11 +117,15 @@ Deno.serve(async (req) => {
       const { data: reservationId, error: reserveError } = await db.rpc("reserve_party_item", { p_product_id: body.id, p_participant_id: participant.id, p_participant_name: participant.name, p_quantity: body.quantity, p_source: body.source });
       if (reserveError) return json({ error: reserveError.message.includes("INSUFFICIENT_QUANTITY") ? "Essa quantidade acabou de ser reservada por outra pessoa. Atualize a lista e tente novamente." : "Não foi possível reservar esse item." }, 409);
       result = { error: null, data: reservationId };
+      const { data: product } = await db.from("party_products").select("name,unit").eq("id", body.id).single();
+      await notifyParticipants(db, participant.id, "Nova contribuição na festa", `${participant.name} assumiu ${body.quantity} ${product?.unit ?? ""} de ${product?.name ?? "um item"}.`, "reservation");
     } else if (action === "cancel") {
       if (!uuid(body.id)) return json({ error: "Reserva não encontrada." }, 400);
       const { data: row } = await db.from("party_reservations").select("participant_id").eq("id", body.id).single();
       if (!row || (!admin && row.participant_id !== participant?.id)) return json({ error: "Você só pode cancelar suas próprias reservas." }, 403);
+      const { data: product } = await db.from("party_products").select("name").eq("id", row.product_id).single();
       result = await db.from("party_reservations").delete().eq("id", body.id);
+      if (!result.error) await notifyParticipants(db, participant?.id ?? null, "Contribuição liberada", `Uma contribuição de ${product?.name ?? "um item"} foi cancelada e voltou a ficar disponível.`, "cancellation");
     } else if (action === "adjust_reservation") {
       if (!uuid(body.id) || !Number.isFinite(body.quantity) || body.quantity <= 0) return json({ error: "Informe uma quantidade válida." }, 400);
       const { data: row } = await db.from("party_reservations").select("participant_id,quantity").eq("id", body.id).single();
@@ -79,6 +133,8 @@ Deno.serve(async (req) => {
       if (body.quantity >= Number(row.quantity)) return json({ error: "A nova quantidade precisa ser menor que a quantidade atual." }, 400);
       const { data: released, error: adjustError } = await db.rpc("update_party_reservation_quantity", { p_reservation_id: body.id, p_quantity: body.quantity });
       if (adjustError) return json({ error: "Não foi possível ajustar a quantidade. Atualize a lista e tente novamente." }, 409);
+      const { data: product } = await db.from("party_products").select("name,unit").eq("id", row.product_id).single();
+      await notifyParticipants(db, participant?.id ?? null, "Quantidade atualizada", `${Number(released)} ${product?.unit ?? ""} de ${product?.name ?? "um item"} foram liberados para a lista.`, "adjustment");
       return json({ ok: true, released });
     } else if (action === "reservation_status") {
       if (!uuid(body.id) || !["planned","purchased","at_home","delivered"].includes(body.status)) return json({ error: "Situação inválida." }, 400);
