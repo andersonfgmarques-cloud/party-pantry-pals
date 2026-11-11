@@ -8,7 +8,7 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
-    "lint": "eslint .",
+    "lint": "eslint vite.config.ts src/lib/error-reporting.ts",
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
