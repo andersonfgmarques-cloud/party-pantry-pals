@@ -7,7 +7,7 @@ const identity = z.object({ name: z.string().trim().min(2).max(60), token: z.str
 const mutation = z.object({
   token: z.string().uuid().optional(),
   password: z.string().max(200).optional(),
-  action: z.enum(['add','reserve','cancel','edit','delete','received','event','verify','participants','public_participants','reservation_status','adjust_reservation','expense_add','expense_delete']),
+  action: z.enum(['add','reserve','cancel','edit','delete','received','event','verify','participants','public_participants','reservation_status','adjust_reservation','push_config','push_subscribe','push_unsubscribe','notifications','notification_read','expense_add','expense_delete']),
   id: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(100).optional(),
   categoryId: z.number().int().min(1).max(6).optional(),
@@ -23,6 +23,8 @@ const mutation = z.object({
   description: z.string().trim().min(1).max(120).optional(),
   amount: z.number().positive().max(10000000).optional(),
   paidBy: z.string().trim().min(2).max(60).optional(),
+  subscription: z.record(z.string(), z.unknown()).optional(),
+  endpoint: z.string().url().optional(),
 });
 type Mutation = z.infer<typeof mutation>;
 type Participant = { id: string; name: string; created_at: string | null };
@@ -68,4 +70,24 @@ export async function identifyParticipant({ data }: { data: z.infer<typeof ident
 export async function changeParty({ data }: { data: Mutation }): Promise<{ok:boolean;participants:Participant[]}> {
   const input = mutation.parse(data);
   return invokePartyApi({ ...input });
+}
+
+
+export type PartyNotification = { id: string; title: string; body: string; kind: string; created_at: string; read_at: string | null };
+export async function getPartyNotifications(token: string): Promise<PartyNotification[]> {
+  const result = await invokePartyApi<{ notifications: PartyNotification[] }>({ action: 'notifications', token });
+  return result.notifications ?? [];
+}
+export async function markPartyNotificationRead(token: string, id: string): Promise<void> {
+  await invokePartyApi({ action: 'notification_read', token, id });
+}
+export async function savePushSubscription(token: string, subscription: PushSubscription): Promise<void> {
+  await invokePartyApi({ action: 'push_subscribe', token, subscription: subscription.toJSON() });
+}
+export async function removePushSubscription(token: string, endpoint: string): Promise<void> {
+  await invokePartyApi({ action: 'push_unsubscribe', token, endpoint });
+}
+export async function getPushPublicKey(): Promise<string> {
+  const result = await invokePartyApi<{ publicKey: string }>({ action: 'push_config' });
+  return result.publicKey;
 }
