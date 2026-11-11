@@ -73,11 +73,11 @@ export function PartyList() {
   const dateLabel = (() => {
     if (!configuredDates.length) return 'Data a definir';
     const dates = configuredDates.map(value => new Date(value + 'T12:00:00'));
-    const sameMonth = dates.every(date => date.getMonth() === dates[0].getMonth() && date.getFullYear() === dates[0].getFullYear());
+    const sameMonth = dates.every(date => date.getMonth() === dates[0]!.getMonth() && date.getFullYear() === dates[0]!.getFullYear());
     if (sameMonth) {
       const days = dates.map(date => dateFmt(date, { day: 'numeric' }));
-      const dayList = days.length === 1 ? days[0] : days.length === 2 ? days.join(' e ') : days.slice(0, -1).join(', ') + ' e ' + days[days.length - 1];
-      return dayList + ' de ' + dateFmt(dates[0], { month: 'long', year: 'numeric' });
+      const dayList = days.length === 1 ? days[0]! : days.length === 2 ? days.join(' e ') : days.slice(0, -1).join(', ') + ' e ' + days[days.length - 1]!;
+      return dayList + ' de ' + dateFmt(dates[0]!, { month: 'long', year: 'numeric' });
     }
     const sameYear = dates.every(date => date.getFullYear() === dates[0].getFullYear());
     return dates.map((date, index) => dateFmt(date, { day: 'numeric', month: 'long', ...(!sameYear || index === dates.length - 1 ? { year: 'numeric' as const } : {}) })).join(', ');
