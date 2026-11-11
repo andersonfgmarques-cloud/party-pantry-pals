@@ -32,6 +32,11 @@ Deno.serve(async (req) => {
       if (error || !data) return json({ error: "Não foi possível salvar seu nome." }, 400);
       return json(data);
     }
+    if (action === "public_participants") {
+      const { data, error } = await db.from("party_participants").select("id,name,created_at").order("name");
+      if (error) throw error;
+      return json({ ok: true, participants: data ?? [] });
+    }
     const admin = typeof body.password === "string" && body.password === organizerPassword;
     const adminActions = ["edit", "delete", "received", "event", "verify", "participants"];
     if (adminActions.includes(action) && !admin) return json({ error: "Senha incorreta ou acesso exclusivo do organizador." }, 401);
