@@ -79,7 +79,7 @@ export function PartyList() {
       const dayList = days.length === 1 ? days[0]! : days.length === 2 ? days.join(' e ') : days.slice(0, -1).join(', ') + ' e ' + days[days.length - 1]!;
       return dayList + ' de ' + dateFmt(dates[0]!, { month: 'long', year: 'numeric' });
     }
-    const sameYear = dates.every(date => date.getFullYear() === dates[0].getFullYear());
+    const sameYear = dates.every(date => date.getFullYear() === dates[0]!.getFullYear());
     return dates.map((date, index) => dateFmt(date, { day: 'numeric', month: 'long', ...(!sameYear || index === dates.length - 1 ? { year: 'numeric' as const } : {}) })).join(', ');
   })();
   const daysUntilParty = configuredDates[0] ? Math.ceil((new Date(`${configuredDates[0]}T00:00:00`).getTime() - new Date(new Date().toDateString()).getTime()) / 86400000) : null;
