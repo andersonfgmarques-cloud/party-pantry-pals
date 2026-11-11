@@ -72,6 +72,14 @@ Deno.serve(async (req) => {
       const { data: row } = await db.from("party_reservations").select("participant_id").eq("id", body.id).single();
       if (!row || (!admin && row.participant_id !== participant?.id)) return json({ error: "Você só pode cancelar suas próprias reservas." }, 403);
       result = await db.from("party_reservations").delete().eq("id", body.id);
+    } else if (action === "adjust_reservation") {
+      if (!uuid(body.id) || !Number.isFinite(body.quantity) || body.quantity <= 0) return json({ error: "Informe uma quantidade válida." }, 400);
+      const { data: row } = await db.from("party_reservations").select("participant_id,quantity").eq("id", body.id).single();
+      if (!row || (!admin && row.participant_id !== participant?.id)) return json({ error: "Você só pode ajustar suas próprias contribuições." }, 403);
+      if (body.quantity >= Number(row.quantity)) return json({ error: "A nova quantidade precisa ser menor que a quantidade atual." }, 400);
+      const { data: released, error: adjustError } = await db.rpc("update_party_reservation_quantity", { p_reservation_id: body.id, p_quantity: body.quantity });
+      if (adjustError) return json({ error: "Não foi possível ajustar a quantidade. Atualize a lista e tente novamente." }, 409);
+      return json({ ok: true, released });
     } else if (action === "reservation_status") {
       if (!uuid(body.id) || !["planned","purchased","at_home","delivered"].includes(body.status)) return json({ error: "Situação inválida." }, 400);
       const { data: row } = await db.from("party_reservations").select("participant_id").eq("id", body.id).single();
