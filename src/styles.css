@@ -396,3 +396,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .reservation-status { grid-column: 1 / -1; }
   .adjust-button, .withdraw-button { width: 100%; }
 }
+
+
+/* Notification centre */
+.notification-panel { gap: 12px; }
+.notification-panel > button { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; }
+.notification-list { display: flex; flex-direction: column; gap: 8px; max-height: min(52dvh, 440px); overflow-y: auto; }
+.notification-item { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: var(--foreground); text-align: left; font-size: 13px; }
+.notification-item.unread { border-color: color-mix(in oklch, var(--primary) 40%, var(--border)); background: color-mix(in oklch, var(--primary) 7%, var(--card)); }
+.notification-title { font-weight: 700; }
+.notification-item small { color: var(--muted-foreground); font-size: 11px; }
