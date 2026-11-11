@@ -54,6 +54,7 @@ export function PartyList() {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'party_event' }, refresh)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'party_expenses' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'party_birthday_people' }, refresh)
       .subscribe();
     const focus = () => qc.invalidateQueries({ queryKey: ['party'] }); window.addEventListener('focus', focus);
     return () => { supabase.removeChannel(channel); window.removeEventListener('focus', focus); window.removeEventListener('online', updateOnline); window.removeEventListener('offline', updateOnline); };
