@@ -1,6 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { TreePine, CalendarDays, Users, Plus, Search, Coffee, Sandwich, Beef, Flame, CakeSlice, GlassWater, ListChecks, Check, Package, ArrowUpRight, Share2, LockKeyhole, Heart, X, Pencil, Trash2, Download, Settings2, CheckCheck, ShoppingBag, Leaf, ClipboardList } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -17,8 +16,8 @@ type Identity = { id: string; name: string; token: string };
 export function PartyList() {
   const { data } = useSuspenseQuery(partyQuery);
   const qc = useQueryClient();
-  const identify = useServerFn(identifyParticipant);
-  const mutate = useServerFn(changeParty);
+  const identify = identifyParticipant;
+  const mutate = changeParty;
   const [person, setPerson] = useState<Identity | null>(null);
   const [modal, setModal] = useState<Modal>(null);
   const [selected, setSelected] = useState<Product | null>(null);
