@@ -1,0 +1,12 @@
+name = "party-pantry-pals"
+main = ".output/server/index.mjs"
+compatibility_date = "2026-11-11"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[assets]
+directory = ".output/public"
+binding = "ASSETS"
+
+[observability]
+enabled = true
