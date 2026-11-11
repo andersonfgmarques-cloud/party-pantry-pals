@@ -45,12 +45,14 @@ export type Database = {
           id: number
           name: string
           party_date: string | null
+          party_end_date: string | null
         }
         Insert: {
           guests?: number | null
           id?: number
           name?: string
           party_date?: string | null
+          party_end_date?: string | null
         }
         Update: {
           guests?: number | null
