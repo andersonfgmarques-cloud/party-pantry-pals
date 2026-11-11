@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
     const admin = typeof body.password === "string" && body.password === organizerPassword;
-    const adminActions = ["edit", "delete", "received", "event", "verify", "participants"];
+    const adminActions = ["edit", "delete", "received", "event", "verify", "participants", "birthday_add", "birthday_edit", "birthday_delete"];
     if (adminActions.includes(action) && !admin) return json({ error: "Senha incorreta ou acesso exclusivo do organizador." }, 401);
     let participant: { id: string; name: string } | null = null;
     if (!admin) {
@@ -156,6 +156,41 @@ Deno.serve(async (req) => {
     } else if (action === "received") {
       if (!uuid(body.id) || typeof body.received !== "boolean") return json({ error: "Item não encontrado." }, 400);
       result = await db.from("party_products").update({ received: body.received }).eq("id", body.id);
+    } else if (action === "birthday_add" || action === "birthday_edit" || action === "birthday_delete") {
+      if (!admin) return json({ error: "Ação exclusiva do organizador." }, 403);
+      if (action === "birthday_delete") {
+        if (!uuid(body.id)) return json({ error: "Aniversariante não encontrado." }, 400);
+        const { data: current } = await db.from("party_birthday_people").select("photo_path").eq("id", body.id).single();
+        if (!current) return json({ error: "Aniversariante não encontrado." }, 404);
+        const { error } = await db.from("party_birthday_people").delete().eq("id", body.id);
+        if (error) throw error;
+        await db.storage.from("party-birthday-photos").remove([current.photo_path]);
+        return json({ ok: true });
+      }
+      if (!str(body.name, 60)) return json({ error: "Informe o nome do aniversariante (até 60 caracteres)." }, 400);
+      let photoPath: string | undefined;
+      if (typeof body.photoData === "string") {
+        const match = body.photoData.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
+        if (!match || match[2].length > 4194304) return json({ error: "Envie uma foto JPG, PNG ou WebP de até 3 MB." }, 400);
+        const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0));
+        const extension = match[1] === "image/png" ? "png" : match[1] === "image/webp" ? "webp" : "jpg";
+        photoPath = `${crypto.randomUUID()}.${extension}`;
+        const { error: uploadError } = await db.storage.from("party-birthday-photos").upload(photoPath, bytes, { contentType: match[1], upsert: false });
+        if (uploadError) throw uploadError;
+      }
+      if (action === "birthday_add" && !photoPath) return json({ error: "Selecione uma foto para o aniversariante." }, 400);
+      if (action === "birthday_edit") {
+        if (!uuid(body.id)) return json({ error: "Aniversariante não encontrado." }, 400);
+        const { data: current } = await db.from("party_birthday_people").select("photo_path").eq("id", body.id).single();
+        if (!current) return json({ error: "Aniversariante não encontrado." }, 404);
+        const { error } = await db.from("party_birthday_people").update({ name: body.name.trim(), ...(photoPath ? { photo_path: photoPath } : {}) }).eq("id", body.id);
+        if (error) throw error;
+        if (photoPath) await db.storage.from("party-birthday-photos").remove([current.photo_path]);
+      } else {
+        const { error } = await db.from("party_birthday_people").insert({ name: body.name.trim(), photo_path: photoPath! });
+        if (error) throw error;
+      }
+      return json({ ok: true });
     } else if (action === "event") {
       if (body.date && body.endDate && body.endDate < body.date) return json({ error: "A data final não pode ser anterior à data inicial." }, 400);
       result = await db.from("party_event").update({ party_date: body.date ?? null, party_end_date: body.endDate ?? null, guests: body.guests ?? null }).eq("id", 1);
