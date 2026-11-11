@@ -21,7 +21,7 @@ const mutation = z.object({
   participantId: z.string().uuid().optional(),
 });
 type Mutation = z.infer<typeof mutation>;
-type Participant = { id: string; name: string; created_at?: string | null };
+type Participant = { id: string; name: string; created_at: string | null };
 
 async function invokePartyApi<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke('party-api', { body });
