@@ -7,7 +7,7 @@ const identity = z.object({ name: z.string().trim().min(2).max(60), token: z.str
 const mutation = z.object({
   token: z.string().uuid().optional(),
   password: z.string().max(200).optional(),
-  action: z.enum(['add','reserve','cancel','edit','delete','received','event','verify','participants']),
+  action: z.enum(['add','reserve','cancel','edit','delete','received','event','verify','participants','public_participants']),
   id: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(100).optional(),
   categoryId: z.number().int().min(1).max(6).optional(),
