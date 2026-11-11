@@ -21,6 +21,12 @@ export type Database = {
         Relationships: []
       }
 
+      party_birthday_people: {
+        Row: { id: string; name: string; photo_path: string; created_at: string }
+        Insert: { id?: string; name: string; photo_path: string; created_at?: string }
+        Update: { id?: string; name?: string; photo_path?: string; created_at?: string }
+        Relationships: []
+      }
       party_categories: {
         Row: {
           icon: string
