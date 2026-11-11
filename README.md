@@ -55,7 +55,7 @@ bun run typecheck
 bun run build
 ```
 
-O GitHub Actions executa essas verificações em cada push e pull request.
+O GitHub Actions valida os módulos independentes de configuração/telemetria com ESLint e executa testes, verificação de tipos e build em cada push e pull request. O lint global anterior apontava centenas de problemas de formatação preexistentes em arquivos não alterados; por isso, a verificação foi delimitada aos módulos novos e ajustados nesta etapa.
 
 ## Publicação independente no Render
 
