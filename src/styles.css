@@ -358,3 +358,28 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (hover: none) and (pointer: coarse) {
   .carry-button, .filter-button, .nav-button, .admin-controls button { min-height: 42px; }
 }
+
+
+/* Contribution controls: keep the withdrawal action inside its product card */
+.contributors { display: flex; flex-direction: column; align-items: stretch; gap: 10px; min-width: 0; }
+.reservation-contribution { display: flex; flex-direction: column; align-items: stretch; gap: 7px; width: 100%; min-width: 0; padding: 9px 0; border-top: 1px solid var(--border); }
+.reservation-person { display: flex; align-items: center; gap: 7px; min-width: 0; color: var(--muted-foreground); font-size: 12px; }
+.reservation-person-name { min-width: 0; overflow-wrap: anywhere; }
+.reservation-quantity { flex: 0 0 auto; white-space: nowrap; color: var(--foreground); font-weight: 600; }
+.reservation-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.reservation-status { min-width: 0; width: auto; max-width: 100%; min-height: 36px; padding: 5px 28px 5px 9px; font-size: 11px; }
+.withdraw-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 6px 11px; border-color: color-mix(in oklch, var(--destructive) 30%, var(--border)); color: var(--destructive); font-size: 12px; white-space: nowrap; }
+.withdraw-button:hover { background: var(--destructive); color: var(--destructive-foreground); }
+.reservation-state-label { color: var(--muted-foreground); font-size: 11px; }
+@media (max-width: 700px) {
+  .contributors { gap: 7px; margin-block: 10px; }
+  .reservation-contribution { gap: 8px; padding-block: 10px; }
+  .reservation-person { font-size: 12px; }
+  .reservation-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 7px; }
+  .reservation-status { width: 100%; max-width: none; }
+  .withdraw-button { min-height: 40px; padding-inline: 10px; }
+}
+@media (max-width: 380px) {
+  .reservation-actions { grid-template-columns: minmax(0, 1fr); }
+  .withdraw-button { width: 100%; }
+}
