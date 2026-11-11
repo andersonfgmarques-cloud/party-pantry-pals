@@ -1,6 +1,9 @@
 name: Deploy Cloudflare Workers
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -11,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -23,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build for Cloudflare Workers
+      - name: Build application
         run: bun run build
         env:
           NITRO_PRESET: cloudflare_module
@@ -32,13 +35,52 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
 
-      - name: Deploy Worker
-        run: bunx --yes wrangler deploy --config wrangler.toml
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: party-pantry-pals-worker
+          path: |
+            .output/
+            wrangler.toml
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download build
+        uses: actions/download-artifact@v4
+        with:
+          name: party-pantry-pals-worker
+          path: .
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Publish application
+        id: publish
+        shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          output="$(bunx --yes wrangler deploy --config wrangler.toml 2>&1)"
+          printf '%s\\n' "$output"
+          worker_url="$(printf '%s\\n' "$output" | grep -Eo 'https://[A-Za-z0-9.-]+\\.workers\\.dev' | head -n 1 || true)"
+          if [ -z "$worker_url" ]; then
+            echo "Não foi possível identificar a URL pública do Worker." >&2
+            exit 1
+          fi
+          echo "worker_url=$worker_url" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Party Pantry Pals publicado"
+            echo
+            echo "**Endereço para testar:** [$worker_url]($worker_url)"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Configure server secrets
+      - name: Configure private server secrets
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -50,5 +92,10 @@ jobs:
         run: |
           set -euo pipefail
           for name in SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY ORGANIZER_PASSWORD; do
-            printenv "$name" | bunx --yes wrangler secret put "$name" --name party-pantry-pals
+            printf '%s' "${!name}" | bunx --yes wrangler secret put "$name" --name party-pantry-pals
           done
+
+      - name: Show application URL
+        run: |
+          echo "### Aplicação disponível" >> "$GITHUB_STEP_SUMMARY"
+          echo "[Abrir Party Pantry Pals](${{ steps.publish.outputs.worker_url }})" >> "$GITHUB_STEP_SUMMARY"
