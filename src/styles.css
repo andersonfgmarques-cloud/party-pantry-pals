@@ -420,3 +420,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (min-width: 640px) { .birthday-grid { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 18px; } }
 @media (min-width: 1024px) { .birthday-grid { grid-template-columns: repeat(4,minmax(0,1fr)); } }
 @media (max-width: 420px) { .birthday-album { padding: 15px; } .birthday-grid { gap: 10px; } .birthday-card > strong { font-size: 14px; } .birthday-actions button { min-height: 34px; padding-inline: 7px; font-size: 11px; } }
+
+/* Selectable individual event days */
+.party-date-list { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; }
+.party-date-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.party-date-chip { display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 6px 10px; background: var(--secondary); color: var(--foreground); font-size: 13px; }
+.party-date-chip button { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--muted); font-size: 17px; line-height: 1; }
