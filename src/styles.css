@@ -383,3 +383,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .reservation-actions { grid-template-columns: minmax(0, 1fr); }
   .withdraw-button { width: 100%; }
 }
+
+
+.adjust-button { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 6px 12px; border-color: color-mix(in oklch, var(--primary) 35%, var(--border)); color: var(--primary); font-size: 12px; white-space: nowrap; }
+.adjust-button:hover { background: var(--primary); color: var(--primary-foreground); }
+@media (max-width: 700px) {
+  .reservation-actions { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .adjust-button, .withdraw-button { min-height: 40px; padding-inline: 9px; }
+}
+@media (max-width: 380px) {
+  .reservation-actions { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .reservation-status { grid-column: 1 / -1; }
+  .adjust-button, .withdraw-button { width: 100%; }
+}
