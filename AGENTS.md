@@ -28,3 +28,8 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Application rules
+- Public party data is read with RLS; mutations run in server functions validating a hashed device capability or organizer password, because participants must not create accounts.
+- Keep unspecified product quantities nullable; never invent event dates, guest counts or requested quantities.
+- Installability uses a manifest without app-shell caching because offline use was not requested.
