@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
     const admin = typeof body.password === "string" && body.password === organizerPassword;
-    const adminActions = ["edit", "delete", "received", "event", "verify", "participants"];
+    const adminActions = ["edit", "delete", "received", "event", "verify", "participants", "birthday_add", "birthday_edit", "birthday_delete"];
     if (adminActions.includes(action) && !admin) return json({ error: "Senha incorreta ou acesso exclusivo do organizador." }, 401);
     let participant: { id: string; name: string } | null = null;
     if (!admin) {
