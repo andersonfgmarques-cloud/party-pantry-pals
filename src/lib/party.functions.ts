@@ -51,7 +51,7 @@ export const changeParty = createServerFn({ method: 'POST' }).inputValidator(mut
   let error: { message: string; code?: string } | null = null;
   if (data.action === 'add') {
     if (!data.name || !data.categoryId || !data.unit) throw new Error('Preencha nome, categoria e unidade.');
-    ({ error } = await db.from('party_products').insert({ name: data.name, category_id: data.categoryId, quantity: data.quantity ?? null, unit: data.unit, note: data.note }));
+    ({ error } = await db.from('party_products').insert({ name: data.name, category_id: data.categoryId, quantity: data.quantity ?? null, unit: data.unit, note: data.note ?? null }));
   } else if (data.action === 'reserve') {
     if (!data.id || !data.quantity || !data.source) throw new Error('Preencha a quantidade.');
     if (admin && data.participantId) { const { data: row } = await db.from('party_participants').select('id,name').eq('id', data.participantId).single(); participant = row; }
@@ -64,7 +64,7 @@ export const changeParty = createServerFn({ method: 'POST' }).inputValidator(mut
     ({ error } = await db.from('party_reservations').delete().eq('id', data.id));
   } else if (data.action === 'edit') {
     if (!data.id || !data.name || !data.categoryId || !data.unit) throw new Error('Preencha os campos do item.');
-    ({ error } = await db.from('party_products').update({ name: data.name, category_id: data.categoryId, quantity: data.quantity ?? null, unit: data.unit, note: data.note }).eq('id', data.id));
+    ({ error } = await db.from('party_products').update({ name: data.name, category_id: data.categoryId, quantity: data.quantity ?? null, unit: data.unit, note: data.note ?? null }).eq('id', data.id));
   } else if (data.action === 'delete') {
     if (!data.id) throw new Error('Item não encontrado.');
     ({ error } = await db.from('party_products').delete().eq('id', data.id));
