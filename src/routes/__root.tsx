@@ -88,10 +88,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
       { rel: "icon", href: import.meta.env.BASE_URL + "favicon.ico", type: "image/x-icon" },
       { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;650;700;750&display=swap' },
       { rel: 'manifest', href: import.meta.env.BASE_URL + 'manifest.webmanifest' },
