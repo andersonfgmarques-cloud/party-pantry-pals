@@ -7,7 +7,7 @@ const identity = z.object({ name: z.string().trim().min(2).max(60), token: z.str
 const mutation = z.object({
   token: z.string().uuid().optional(),
   password: z.string().max(200).optional(),
-  action: z.enum(['add','reserve','cancel','edit','delete','received','event','verify','participants','public_participants']),
+  action: z.enum(['add','reserve','cancel','edit','delete','received','event','verify','participants','public_participants','reservation_status','expense_add','expense_delete']),
   id: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(100).optional(),
   categoryId: z.number().int().min(1).max(6).optional(),
@@ -19,6 +19,10 @@ const mutation = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   guests: z.number().int().positive().max(100000).nullable().optional(),
   participantId: z.string().uuid().optional(),
+  status: z.enum(['planned','purchased','at_home','delivered']).optional(),
+  description: z.string().trim().min(1).max(120).optional(),
+  amount: z.number().positive().max(10000000).optional(),
+  paidBy: z.string().trim().min(2).max(60).optional(),
 });
 type Mutation = z.infer<typeof mutation>;
 type Participant = { id: string; name: string; created_at: string | null };
@@ -42,17 +46,18 @@ async function invokePartyApi<T>(body: Record<string, unknown>): Promise<T> {
 }
 
 export async function getParty(): Promise<PartyData> {
-  const [event, categories, products, reservations] = await Promise.all([
+  const [event, categories, products, reservations, expenses] = await Promise.all([
     supabase.from('party_event').select('*').eq('id', 1).single(),
     supabase.from('party_categories').select('*').order('id'),
     supabase.from('party_products').select('*').order('created_at').order('name'),
     supabase.from('party_reservations').select('*').order('created_at'),
+    supabase.from('party_expenses').select('*').order('created_at'),
   ]);
-  for (const result of [event, categories, products, reservations]) {
+  for (const result of [event, categories, products, reservations, expenses]) {
     if (result.error) throw new Error('Não foi possível carregar a lista. Verifique a conexão e as permissões do Supabase.');
   }
   if (!event.data) throw new Error('Evento não encontrado.');
-  return { event: event.data, categories: categories.data ?? [], products: products.data ?? [], reservations: reservations.data ?? [] };
+  return { event: event.data, categories: categories.data ?? [], products: products.data ?? [], reservations: reservations.data ?? [], expenses: expenses.data ?? [] };
 }
 
 export async function identifyParticipant({ data }: { data: z.infer<typeof identity> }): Promise<{id:string;name:string}> {

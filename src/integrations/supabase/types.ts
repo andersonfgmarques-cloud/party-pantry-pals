@@ -14,6 +14,13 @@ export type Database = {
   }
   public: {
     Tables: {
+      party_expenses: {
+        Row: { id: string; description: string; amount: number; paid_by: string; created_at: string }
+        Insert: { id?: string; description: string; amount: number; paid_by: string; created_at?: string }
+        Update: { id?: string; description?: string; amount?: number; paid_by?: string; created_at?: string }
+        Relationships: []
+      }
+
       party_categories: {
         Row: {
           icon: string
@@ -124,6 +131,7 @@ export type Database = {
           product_id: string
           quantity: number
           source: string
+          status: string
         }
         Insert: {
           created_at?: string | null
@@ -142,6 +150,7 @@ export type Database = {
           product_id?: string
           quantity?: number
           source?: string
+          status?: string
         }
         Relationships: [
           {
