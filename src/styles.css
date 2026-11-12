@@ -426,3 +426,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .party-date-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .party-date-chip { display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 6px 10px; background: var(--secondary); color: var(--foreground); font-size: 13px; }
 .party-date-chip button { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--muted); font-size: 17px; line-height: 1; }
+
+
+/* Compact header on small screens: keep the complete brand visible. */
+@media (max-width: 640px) {
+  .site-header { height: 68px; }
+  .site-header .party-container { padding-inline: 16px; }
+  .site-header .header-nav { display: none; }
+  .site-header img[alt^="Festa Junta"] { width: 190px; height: 52px; }
+}
