@@ -48,6 +48,7 @@ export type Database = {
       party_event: {
         Row: {
           guests: number | null
+          location_url: string | null
           id: number
           name: string
           party_date: string | null
@@ -56,6 +57,7 @@ export type Database = {
         }
         Insert: {
           guests?: number | null
+          location_url?: string | null
           id?: number
           name?: string
           party_date?: string | null
@@ -64,6 +66,7 @@ export type Database = {
         }
         Update: {
           guests?: number | null
+          location_url?: string | null
           id?: number
           name?: string
           party_date?: string | null
