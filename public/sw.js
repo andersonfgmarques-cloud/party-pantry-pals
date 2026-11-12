@@ -4,8 +4,8 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "Festou!";
   const options = {
     body: payload.body || "Há novidades na organização da festa.",
-    icon: new URL("festou-logo.jpg", self.registration.scope).href,
-    badge: new URL("festou-logo.jpg", self.registration.scope).href,
+    icon: new URL("festou-icon.svg", self.registration.scope).href,
+    badge: new URL("festou-icon.svg", self.registration.scope).href,
     data: { url: payload.url || "./" },
     tag: payload.tag || "party-update",
     renotify: true
