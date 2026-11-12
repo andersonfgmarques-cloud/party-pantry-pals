@@ -21,3 +21,5 @@ create table if not exists public.party_participant_sessions (
 alter table public.party_participant_sessions enable row level security;
 revoke all on public.party_participant_sessions from anon, authenticated;
 grant all on public.party_participant_sessions to service_role;
+
+create index if not exists party_participant_sessions_participant_id_idx on public.party_participant_sessions(participant_id);
