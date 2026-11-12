@@ -1,6 +1,6 @@
 {
-  "name": "Festa Junta",
-  "short_name": "Festa Junta",
+  "name": "Festou!",
+  "short_name": "Festou!",
   "lang": "pt-BR",
   "start_url": "./",
   "scope": "./",
@@ -9,7 +9,7 @@
   "theme_color": "#21613f",
   "icons": [
     {
-      "src": "festa-junta-logo.svg",
+      "src": "festou-logo.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
