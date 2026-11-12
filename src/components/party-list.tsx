@@ -177,7 +177,93 @@ export function PartyList() {
   async function addExpense(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const f = new FormData(e.currentTarget); const ok = await act({ action: 'expense_add', description: String(f.get('description')), amount: Number(f.get('amount')), paidBy: String(f.get('paidBy')) }, 'Despesa registrada!'); if (ok) (e.currentTarget as HTMLFormElement).reset(); }
   function summary(pending = false) { return `${data.event.name}\n${dateLabel}\n\n` + data.categories.map(c => { const items = data.products.filter(p => p.category_id === c.id && (!pending || !['complete','received'].includes(itemStatus(p, reservedFor(p.id, data.reservations))))); return items.length ? `${c.name.toUpperCase()}\n` + items.map(p => { const reserved = reservedFor(p.id, data.reservations); const remaining = remainingFor(p, reserved); const peopleNames = data.reservations.filter(r => r.product_id === p.id).map(r => `${r.participant_name}: ${number(Number(r.quantity))} ${p.unit}`).join(', '); return `• ${p.name}: ${p.quantity === null ? 'quantidade a definir' : `${number(Number(p.quantity))} ${p.unit}`} | ${statusLabels[itemStatus(p, reserved)]}${remaining !== null ? ` | faltam ${number(remaining)} ${p.unit}` : ''}${peopleNames ? `\n  ${peopleNames}` : ''}`; }).join('\n') : ''; }).filter(Boolean).join('\n\n'); }
   function share(pending = false) { const text = pending ? `${summary(true)}\n\nParticipe: ${window.location.origin}${import.meta.env.BASE_URL}` : `🌿 Festa na Chácara\nUma festa feita por todos! Escolha o que você vai levar:\n${window.location.origin}${import.meta.env.BASE_URL}`; window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer'); }
-  async function exportPdf() { try { const { jsPDF } = await import('jspdf'); const doc = new jsPDF(); const lines = doc.splitTextToSize(summary(), 175); let y = 20; doc.setFontSize(11); for (const line of lines) { if (y > 277) { doc.addPage(); y = 20; } doc.text(line, 17, y); y += 6; } doc.save('festa-na-chacara.pdf'); toast.success('Lista exportada em PDF.'); } catch { toast.error('Não foi possível exportar a lista.'); } }
+  async function exportReportPdf(title: string, content: string[], filename: string) {
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 16;
+      let y = 20;
+      const writeLine = (line: string, size = 10, bold = false) => {
+        doc.setFont('helvetica', bold ? 'bold' : 'normal');
+        doc.setFontSize(size);
+        const wrapped = doc.splitTextToSize(line, pageWidth - margin * 2);
+        for (const part of wrapped) {
+          if (y > pageHeight - 18) { doc.addPage(); y = 18; }
+          doc.text(part, margin, y);
+          y += size * 0.48 + 2;
+        }
+      };
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.text('Festa na Chácara', margin, y);
+      y += 9;
+      writeLine(title, 13, true);
+      writeLine(data.event.name, 10);
+      writeLine(dateLabel, 10);
+      writeLine(`Emitido em ${new Date().toLocaleString('pt-BR')}`, 8);
+      y += 4;
+      doc.setDrawColor(210, 220, 214);
+      doc.line(margin, y, pageWidth - margin, y);
+      y += 7;
+      for (const line of content) {
+        if (line === '') { y += 2; continue; }
+        writeLine(line, line.startsWith('  ') ? 9 : 10, !line.startsWith('  ') && (line.startsWith('Categoria:') || line.startsWith('Participante:')));
+      }
+      const pages = doc.getNumberOfPages();
+      for (let page = 1; page <= pages; page++) {
+        doc.setPage(page);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(120);
+        doc.text(`Festa na Chácara · Página ${page} de ${pages}`, pageWidth / 2, pageHeight - 8, { align: 'center' });
+      }
+      doc.save(filename);
+      toast.success('PDF gerado com sucesso!');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível gerar o PDF.');
+    }
+  }
+  function reportLines(kind: StatsKind) {
+    if (kind === 'people') return participants.map(p => {
+      const entries = data.reservations.filter(r => r.participant_id === p.id);
+      return [`Participante: ${p.name}`, ...(entries.length ? entries.map(r => {
+        const product = data.products.find(x => x.id === r.product_id);
+        return `  • ${product?.name ?? 'Produto'} — ${number(Number(r.quantity))} ${product?.unit ?? ''} (${r.source === 'home' ? 'Já tem em casa' : 'Vai comprar'})`;
+      }) : ['  Sem contribuições registradas']), ''];
+    }).flat();
+    const products = data.products.filter(p => kind === 'items' || (kind === 'assumed'
+      ? reservedFor(p.id, data.reservations) > 0 || p.received
+      : !p.received && itemStatus(p, reservedFor(p.id, data.reservations)) !== 'complete'));
+    return products.flatMap(p => {
+      const taken = reservedFor(p.id, data.reservations);
+      const categoryName = data.categories.find(c => c.id === p.category_id)?.name ?? 'Sem categoria';
+      const reservations = data.reservations.filter(r => r.product_id === p.id);
+      const statusText = p.received ? 'Recebido' : itemStatus(p, taken) === 'complete' ? 'Completo' : taken > 0 ? 'Parcialmente reservado' : 'Disponível';
+      return [
+        `Categoria: ${categoryName}`,
+        `${p.name} — Necessário: ${p.quantity === null ? 'A definir' : `${number(Number(p.quantity))} ${p.unit}`}`,
+        `  Situação: ${statusText}${remainingFor(p, taken) === null ? '' : ` · Faltam ${number(remainingFor(p, taken)!)} ${p.unit}`}`,
+        ...(reservations.length ? reservations.map(r => `  • ${r.participant_name}: ${number(Number(r.quantity))} ${p.unit}`) : ['  Ninguém assumiu este item']),
+        ''
+      ];
+    });
+  }
+  async function exportStatsPdf(kind: StatsKind = statsKind) {
+    const titles = { items: 'Lista completa de itens', assumed: 'Itens assumidos', available: 'Itens ainda disponíveis', people: 'Participantes e contribuições' };
+    const content = kind === 'people' ? reportLines(kind) : reportLines(kind);
+    await exportReportPdf(titles[kind], content, `festa-na-chacara-${kind}.pdf`);
+  }
+  async function exportParticipantPdf(p: { id: string; name: string }) {
+    const entries = data.reservations.filter(r => r.participant_id === p.id);
+    const lines = entries.length ? entries.flatMap(r => {
+      const product = data.products.find(x => x.id === r.product_id);
+      return [`${product?.name ?? 'Produto'} — ${number(Number(r.quantity))} ${product?.unit ?? ''}`, `  ${r.source === 'home' ? 'Já tem em casa' : 'Vai comprar'}`, ''];
+    }) : ['Nenhuma contribuição registrada para este participante.'];
+    await exportReportPdf(`Lista individual: ${p.name}`, lines, `contribuicoes-${p.name.trim().toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, '-')}.pdf`);
+  }
+  async function exportPdf() { await exportReportPdf('Lista completa da festa', summary().split('\\n'), 'festa-na-chacara.pdf'); }
   async function showParticipants() { setBusy(true); try { const result = await mutate({ data: { action: 'participants', password } }); setParticipants(result.participants); setModal('participants'); } catch(e) { toast.error(e instanceof Error ? e.message : 'Erro ao carregar participantes.'); } finally { setBusy(false); } }
   async function openStats(kind: StatsKind) {
     setStatsKind(kind);
@@ -277,10 +363,10 @@ export function PartyList() {
       <Button type="submit" disabled={busy}>{busy ? 'Salvando...' : 'Salvar detalhes'}</Button></form>}
     {modal === 'finance' && <div className="space-y-4"><div className="rounded-lg bg-secondary p-4"><p className="text-xs text-muted-foreground">Total registrado</p><strong className="text-2xl">R$ {number(data.expenses.reduce((sum, expense) => sum + Number(expense.amount), 0))}</strong></div><form className="modal-form" onSubmit={addExpense}><label>Descrição<input name="description" required maxLength={120} placeholder="Ex.: compra de bebidas"/></label><label>Valor (R$)<input name="amount" type="number" min="0.01" step="0.01" required/></label><label>Quem pagou<input name="paidBy" required maxLength={60} placeholder="Nome do responsável"/></label><Button type="submit" disabled={busy}>Registrar despesa</Button></form><div className="max-h-56 overflow-y-auto">{data.expenses.map(expense => <div className="reservation-row" key={expense.id}><div><strong>{expense.description}</strong><p className="help-text">Pago por {expense.paid_by}</p></div><div className="text-right"><strong>R$ {number(Number(expense.amount))}</strong><Button size="sm" variant="ghost" onClick={() => act({ action: 'expense_delete', id: expense.id }, 'Despesa removida.')}>Excluir</Button></div></div>)}{!data.expenses.length && <p className="help-text py-4">Nenhuma despesa registrada.</p>}</div></div>}
     {modal === 'participants' && <div className="max-h-96 overflow-y-auto">{participants.map(p => <div className="reservation-row" key={p.id}><span>{p.name}</span><div className="flex items-center gap-2"><span className="text-muted-foreground text-xs">{data.reservations.filter(r => r.participant_id === p.id).length} contribuições</span><Button size="icon" variant="ghost" title={`Excluir ${p.name}`} aria-label={`Excluir participante ${p.name}`} disabled={busy} onClick={() => deleteParticipant(p)}><Trash2 size={16}/></Button></div></div>)}{!participants.length && <p className="help-text py-6">Ainda não há participantes.</p>}</div>}
-    {modal === 'stats' && <div className="max-h-[65vh] overflow-y-auto space-y-2 pr-1">
+    {modal === 'stats' && <div className="space-y-3"><div className="flex flex-wrap justify-end gap-2"><Button size="sm" onClick={() => exportStatsPdf()}><Download size={15}/> Exportar esta lista em PDF</Button>{statsKind !== 'items' && <Button size="sm" variant="outline" onClick={() => exportStatsPdf('items')}><Download size={15}/> PDF completo</Button>}</div><div className="max-h-[58vh] overflow-y-auto space-y-2 pr-1">
       {statsKind === 'people' && (participants.length ? participants.map(p => {
         const entries = data.reservations.filter(r => r.participant_id === p.id);
-        return <div className="stats-list-row" key={p.id}><div className="min-w-0"><strong>{p.name}</strong><p>{entries.length ? entries.map(r => { const product = data.products.find(x => x.id === r.product_id); return `${product?.name ?? 'Produto'} · ${number(Number(r.quantity))} ${product?.unit ?? ''}`; }).join(' | ') : 'Ainda não assumiu nenhum produto'}</p></div><div className="flex items-center gap-2"><span className="stats-list-count">{entries.length} {entries.length === 1 ? 'item' : 'itens'}</span>{password && <Button size="icon" variant="ghost" title={`Excluir ${p.name}`} aria-label={`Excluir participante ${p.name}`} disabled={busy} onClick={() => deleteParticipant(p)}><Trash2 size={16}/></Button>}</div></div>;
+        return <div className="stats-list-row" key={p.id}><div className="min-w-0"><strong>{p.name}</strong><p>{entries.length ? entries.map(r => { const product = data.products.find(x => x.id === r.product_id); return `${product?.name ?? 'Produto'} · ${number(Number(r.quantity))} ${product?.unit ?? ''}`; }).join(' | ') : 'Ainda não assumiu nenhum produto'}</p></div><div className="flex items-center gap-1"><span className="stats-list-count">{entries.length} {entries.length === 1 ? 'item' : 'itens'}</span><Button size="sm" variant="ghost" title={`PDF de ${p.name}`} onClick={() => exportParticipantPdf(p)}><Download size={14}/> PDF</Button>{password && <Button size="icon" variant="ghost" title={`Excluir ${p.name}`} aria-label={`Excluir participante ${p.name}`} disabled={busy} onClick={() => deleteParticipant(p)}><Trash2 size={16}/></Button>}</div></div>;
       }) : <p className="help-text py-6 text-center">Ainda não há participantes cadastrados.</p>)}
       {statsKind !== 'people' && (data.products.filter(p => statsKind === 'items' || (statsKind === 'assumed' ? reservedFor(p.id, data.reservations) > 0 || p.received : !p.received && itemStatus(p, reservedFor(p.id, data.reservations)) !== 'complete')).length ? data.products.filter(p => statsKind === 'items' || (statsKind === 'assumed' ? reservedFor(p.id, data.reservations) > 0 || p.received : !p.received && itemStatus(p, reservedFor(p.id, data.reservations)) !== 'complete')).map(p => {
         const taken = reservedFor(p.id, data.reservations);
@@ -288,7 +374,7 @@ export function PartyList() {
         const entries = data.reservations.filter(r => r.product_id === p.id);
         return <div className="stats-list-row" key={p.id}><div className="min-w-0"><strong>{p.name}</strong><p>{entries.length ? entries.map(r => `${r.participant_name} (${number(Number(r.quantity))} ${p.unit})`).join(', ') : 'Ninguém assumiu este item ainda'}</p></div><span className="stats-list-count">{statsKind === 'available' ? remaining === null ? 'A definir' : `Faltam ${number(remaining)} ${p.unit}` : p.quantity === null ? `${number(taken)} ${p.unit}` : `${number(taken)} / ${number(Number(p.quantity))} ${p.unit}`}</span></div>;
       }) : <p className="help-text py-6 text-center">Não há itens nesta situação. Tudo certo!</p>)}
-    </div>}
+    </div></div>}
     </DialogContent></Dialog>
   </>;
 }
