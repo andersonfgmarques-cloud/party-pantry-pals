@@ -263,11 +263,19 @@ Deno.serve(async (req) => {
       }
       return json({ ok: true });
     } else if (action === "event") {
+      const locationUrl = body.locationUrl;
+      if (locationUrl !== undefined && locationUrl !== null && locationUrl !== "") {
+        if (typeof locationUrl !== "string" || locationUrl.length > 2048) return json({ error: "O link do local é inválido ou muito longo." }, 400);
+        let parsed: URL;
+        try { parsed = new URL(locationUrl); } catch { return json({ error: "Cole um link válido do Google Maps." }, 400); }
+        const allowedHosts = ["maps.app.goo.gl", "maps.google.com", "google.com", "www.google.com"];
+        if (parsed.protocol !== "https:" || !allowedHosts.includes(parsed.hostname) || ((parsed.hostname === "google.com" || parsed.hostname === "www.google.com") && !parsed.pathname.startsWith("/maps"))) return json({ error: "Use um link HTTPS compartilhado pelo Google Maps." }, 400);
+      }
       const dates = Array.isArray(body.dates)
         ? [...new Set(body.dates.filter((value): value is string => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)))].sort()
         : body.date ? [body.date] : [];
       if (dates.length > 90 || (Array.isArray(body.dates) && dates.length !== body.dates.length)) return json({ error: "Selecione até 90 datas válidas, sem repetição." }, 400);
-      result = await db.from("party_event").update({ party_dates: dates, party_date: dates[0] ?? null, party_end_date: dates.at(-1) ?? null, guests: body.guests ?? null }).eq("id", 1);
+      result = await db.from("party_event").update({ party_dates: dates, party_date: dates[0] ?? null, party_end_date: dates.at(-1) ?? null, guests: body.guests ?? null, location_url: locationUrl || null }).eq("id", 1);
     } else {
       return json({ error: "Ação não reconhecida." }, 400);
     }
