@@ -9,9 +9,9 @@
   "theme_color": "#21613f",
   "icons": [
     {
-      "src": "festou-logo.svg",
+      "src": "festou-logo.jpg",
       "sizes": "any",
-      "type": "image/svg+xml",
+      "type": "image/jpeg",
       "purpose": "any"
     }
   ]
