@@ -11,3 +11,13 @@ create table if not exists public.party_pin_login_attempts (
 alter table public.party_pin_login_attempts enable row level security;
 revoke all on public.party_pin_login_attempts from anon, authenticated;
 grant all on public.party_pin_login_attempts to service_role;
+
+create table if not exists public.party_participant_sessions (
+  id uuid primary key default gen_random_uuid(),
+  participant_id uuid not null references public.party_participants(id) on delete cascade,
+  token_hash text not null unique,
+  created_at timestamptz not null default now()
+);
+alter table public.party_participant_sessions enable row level security;
+revoke all on public.party_participant_sessions from anon, authenticated;
+grant all on public.party_participant_sessions to service_role;
