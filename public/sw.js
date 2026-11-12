@@ -4,8 +4,8 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "Festa Junta";
   const options = {
     body: payload.body || "Há novidades na organização da festa.",
-    icon: new URL("party-icon-192.png", self.registration.scope).href,
-    badge: new URL("party-icon-192.png", self.registration.scope).href,
+    icon: new URL("festa-junta-logo.svg", self.registration.scope).href,
+    badge: new URL("festa-junta-logo.svg", self.registration.scope).href,
     data: { url: payload.url || "./" },
     tag: payload.tag || "party-update",
     renotify: true
