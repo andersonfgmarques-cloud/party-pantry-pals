@@ -1,11 +1,11 @@
 self.addEventListener("push", (event) => {
   let payload = {};
   try { payload = event.data ? event.data.json() : {}; } catch { payload = { body: event.data?.text() ?? "" }; }
-  const title = payload.title || "Festa Junta";
+  const title = payload.title || "Festou!";
   const options = {
     body: payload.body || "Há novidades na organização da festa.",
-    icon: new URL("festa-junta-logo.svg", self.registration.scope).href,
-    badge: new URL("festa-junta-logo.svg", self.registration.scope).href,
+    icon: new URL("festou-logo.svg", self.registration.scope).href,
+    badge: new URL("festou-logo.svg", self.registration.scope).href,
     data: { url: payload.url || "./" },
     tag: payload.tag || "party-update",
     renotify: true
