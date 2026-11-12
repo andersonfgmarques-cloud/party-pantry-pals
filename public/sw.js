@@ -1,7 +1,7 @@
 self.addEventListener("push", (event) => {
   let payload = {};
   try { payload = event.data ? event.data.json() : {}; } catch { payload = { body: event.data?.text() ?? "" }; }
-  const title = payload.title || "Festa na Chácara";
+  const title = payload.title || "Festa Junta";
   const options = {
     body: payload.body || "Há novidades na organização da festa.",
     icon: new URL("party-icon-192.png", self.registration.scope).href,
