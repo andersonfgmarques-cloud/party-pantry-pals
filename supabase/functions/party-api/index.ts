@@ -26,6 +26,18 @@ function safeEqual(a: string, b: string) {
   return diff === 0;
 }
 
+
+async function participantByToken(db: ReturnType<typeof createClient>, token: string) {
+  const tokenHash = await sha256(token);
+  const { data: session } = await db.from("party_participant_sessions").select("participant_id").eq("token_hash", tokenHash).maybeSingle();
+  if (session) {
+    const { data } = await db.from("party_participants").select("id,name").eq("id", session.participant_id).maybeSingle();
+    if (data) return data;
+  }
+  const { data } = await db.from("party_participants").select("id,name").eq("token_hash", tokenHash).maybeSingle();
+  return data;
+}
+
 const uuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const str = (value: unknown, max: number) => typeof value === "string" && value.trim().length > 0 && value.length <= max;
 
@@ -64,7 +76,7 @@ Deno.serve(async (req) => {
 
     if (action === "pin_set") {
       if (!uuid(body.token) || typeof body.pin !== "string" || !/^\\d{6}$/.test(body.pin)) return json({ error: "Defina um PIN de 6 números." }, 400);
-      const { data: owner } = await db.from("party_participants").select("id").eq("token_hash", await sha256(body.token)).maybeSingle();
+      const owner = await participantByToken(db, body.token);
       if (!owner) return json({ error: "Sessão não reconhecida. Entre novamente neste aparelho." }, 401);
       const saltBytes = crypto.getRandomValues(new Uint8Array(16));
       const salt = btoa(String.fromCharCode(...saltBytes));
@@ -94,7 +106,7 @@ Deno.serve(async (req) => {
       }
       await db.from("party_pin_login_attempts").delete().eq("name_hash", nameHash);
       const token = crypto.randomUUID();
-      const { error: tokenError } = await db.from("party_participants").update({ token_hash: await sha256(token) }).eq("id", matches[0].id);
+      const { error: tokenError } = await db.from("party_participant_sessions").insert({ participant_id: matches[0].id, token_hash: await sha256(token) });
       if (tokenError) throw tokenError;
       return json({ id: matches[0].id, name: matches[0].name, token });
     }
@@ -112,7 +124,7 @@ Deno.serve(async (req) => {
     if (action === "push_config") return json({ publicKey: VAPID_PUBLIC_KEY });
     if (action === "push_subscribe" || action === "push_unsubscribe" || action === "notifications" || action === "notification_read") {
       if (!uuid(body.token)) return json({ error: "Identificação do participante inválida." }, 401);
-      const { data: owner } = await db.from("party_participants").select("id").eq("token_hash", await sha256(body.token)).single();
+      const owner = await participantByToken(db, body.token);
       if (!owner) return json({ error: "Participante não encontrado." }, 401);
       if (action === "push_subscribe") {
         const subscription = body.subscription;
@@ -143,7 +155,7 @@ Deno.serve(async (req) => {
     let participant: { id: string; name: string } | null = null;
     if (!admin) {
       if (!uuid(body.token)) return json({ error: "Informe seu nome para participar." }, 401);
-      const { data } = await db.from("party_participants").select("id,name").eq("token_hash", await sha256(body.token)).single();
+      const data = await participantByToken(db, body.token);
       if (!data) return json({ error: "Informe seu nome para participar." }, 401);
       participant = data;
     }
