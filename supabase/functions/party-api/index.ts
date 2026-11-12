@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
     const action = body?.action;
 
     if (action === "pin_set") {
-      if (!uuid(body.token) || typeof body.pin !== "string" || !/^\\d{6}$/.test(body.pin)) return json({ error: "Defina um PIN de 6 números." }, 400);
+      if (!uuid(body.token) || typeof body.pin !== "string" || !/^\d{6}$/.test(body.pin)) return json({ error: "Defina um PIN de 6 números." }, 400);
       const owner = await participantByToken(db, body.token);
       if (!owner) return json({ error: "Sessão não reconhecida. Entre novamente neste aparelho." }, 401);
       const saltBytes = crypto.getRandomValues(new Uint8Array(16));
@@ -86,9 +86,9 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
     if (action === "pin_login") {
-      const name = typeof body.name === "string" ? body.name.trim().replace(/\\s+/g, " ") : "";
-      if (name.length < 2 || name.length > 60 || typeof body.pin !== "string" || !/^\\d{6}$/.test(body.pin)) return json({ error: "Informe seu nome e o PIN de 6 números." }, 400);
-      const nameHash = await sha256(name.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR"));
+      const name = typeof body.name === "string" ? body.name.trim().replace(/\s+/g, " ") : "";
+      if (name.length < 2 || name.length > 60 || typeof body.pin !== "string" || !/^\d{6}$/.test(body.pin)) return json({ error: "Informe seu nome e o PIN de 6 números." }, 400);
+      const nameHash = await sha256(name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR"));
       const { data: attempt } = await db.from("party_pin_login_attempts").select("*").eq("name_hash", nameHash).maybeSingle();
       const now = Date.now();
       if (attempt?.locked_until && new Date(attempt.locked_until).getTime() > now) return json({ error: "Muitas tentativas. Aguarde 15 minutos e tente novamente." }, 429);
