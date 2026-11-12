@@ -74,6 +74,17 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const action = body?.action;
 
+    if (action === "participant_logout") {
+      if (!uuid(body.token)) return json({ error: "Sessão de participante inválida." }, 400);
+      const tokenHash = await sha256(body.token);
+      const owner = await participantByToken(db, body.token);
+      if (!owner) return json({ error: "Esta sessão já foi encerrada." }, 401);
+      const { error: sessionError } = await db.from("party_participant_sessions").delete().eq("token_hash", tokenHash);
+      if (sessionError) throw sessionError;
+      const { error: legacyError } = await db.from("party_participants").update({ token_hash: null }).eq("id", owner.id).eq("token_hash", tokenHash);
+      if (legacyError) throw legacyError;
+      return json({ ok: true });
+    }
     if (action === "pin_set") {
       if (!uuid(body.token) || typeof body.pin !== "string" || !/^\d{6}$/.test(body.pin)) return json({ error: "Defina um PIN de 6 números." }, 400);
       const owner = await participantByToken(db, body.token);
