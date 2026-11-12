@@ -21,6 +21,7 @@ const mutation = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(90).optional(),
   guests: z.number().int().positive().max(100000).nullable().optional(),
+  locationUrl: z.string().url().max(2048).nullable().optional(),
   participantId: z.string().uuid().optional(),
   status: z.enum(['planned','purchased','at_home','delivered']).optional(),
   description: z.string().trim().min(1).max(120).optional(),
