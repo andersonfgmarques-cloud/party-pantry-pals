@@ -13,6 +13,31 @@ async function sha256(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", encoder.encode(value));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+async function hashPin(pin: string, salt: string) {
+  const key = await crypto.subtle.importKey("raw", encoder.encode(pin), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: Uint8Array.from(atob(salt), c => c.charCodeAt(0)), iterations: 310000, hash: "SHA-256" }, key, 256);
+  return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+function safeEqual(a: string, b: string) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+
+async function participantByToken(db: ReturnType<typeof createClient>, token: string) {
+  const tokenHash = await sha256(token);
+  const { data: session } = await db.from("party_participant_sessions").select("participant_id").eq("token_hash", tokenHash).maybeSingle();
+  if (session) {
+    const { data } = await db.from("party_participants").select("id,name").eq("id", session.participant_id).maybeSingle();
+    if (data) return data;
+  }
+  const { data } = await db.from("party_participants").select("id,name").eq("token_hash", tokenHash).maybeSingle();
+  return data;
+}
+
 const uuid = (value: unknown) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const str = (value: unknown, max: number) => typeof value === "string" && value.trim().length > 0 && value.length <= max;
 
@@ -48,6 +73,43 @@ Deno.serve(async (req) => {
     const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
     const body = await req.json();
     const action = body?.action;
+
+    if (action === "pin_set") {
+      if (!uuid(body.token) || typeof body.pin !== "string" || !/^\\d{6}$/.test(body.pin)) return json({ error: "Defina um PIN de 6 números." }, 400);
+      const owner = await participantByToken(db, body.token);
+      if (!owner) return json({ error: "Sessão não reconhecida. Entre novamente neste aparelho." }, 401);
+      const saltBytes = crypto.getRandomValues(new Uint8Array(16));
+      const salt = btoa(String.fromCharCode(...saltBytes));
+      const pinHash = await hashPin(body.pin, salt);
+      const { error } = await db.from("party_participants").update({ pin_hash: pinHash, pin_salt: salt }).eq("id", owner.id);
+      if (error) throw error;
+      return json({ ok: true });
+    }
+    if (action === "pin_login") {
+      const name = typeof body.name === "string" ? body.name.trim().replace(/\\s+/g, " ") : "";
+      if (name.length < 2 || name.length > 60 || typeof body.pin !== "string" || !/^\\d{6}$/.test(body.pin)) return json({ error: "Informe seu nome e o PIN de 6 números." }, 400);
+      const nameHash = await sha256(name.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR"));
+      const { data: attempt } = await db.from("party_pin_login_attempts").select("*").eq("name_hash", nameHash).maybeSingle();
+      const now = Date.now();
+      if (attempt?.locked_until && new Date(attempt.locked_until).getTime() > now) return json({ error: "Muitas tentativas. Aguarde 15 minutos e tente novamente." }, 429);
+      const { data: candidates, error: lookupError } = await db.from("party_participants").select("id,name,pin_hash,pin_salt").ilike("name", name).not("pin_hash", "is", null);
+      if (lookupError) throw lookupError;
+      const matches = [];
+      for (const candidate of candidates ?? []) {
+        if (candidate.pin_hash && candidate.pin_salt && safeEqual(await hashPin(body.pin, candidate.pin_salt), candidate.pin_hash)) matches.push(candidate);
+      }
+      if (matches.length !== 1) {
+        const windowExpired = !attempt || now - new Date(attempt.window_started_at).getTime() > 15 * 60 * 1000;
+        const attempts = windowExpired ? 1 : Number(attempt.attempts) + 1;
+        await db.from("party_pin_login_attempts").upsert({ name_hash: nameHash, attempts, window_started_at: windowExpired ? new Date().toISOString() : attempt.window_started_at, locked_until: attempts >= 5 ? new Date(now + 15 * 60 * 1000).toISOString() : null });
+        return json({ error: "Nome ou PIN incorreto. Confira os dados e tente novamente." }, 401);
+      }
+      await db.from("party_pin_login_attempts").delete().eq("name_hash", nameHash);
+      const token = crypto.randomUUID();
+      const { error: tokenError } = await db.from("party_participant_sessions").insert({ participant_id: matches[0].id, token_hash: await sha256(token) });
+      if (tokenError) throw tokenError;
+      return json({ id: matches[0].id, name: matches[0].name, token });
+    }
     if (action === "identify") {
       if (!str(body.name, 60) || body.name.trim().length < 2 || !uuid(body.token)) return json({ error: "Nome ou identificação inválidos." }, 400);
       const { data, error } = await db.from("party_participants").upsert({ name: body.name.trim(), token_hash: await sha256(body.token) }, { onConflict: "token_hash" }).select("id,name").single();
@@ -62,7 +124,7 @@ Deno.serve(async (req) => {
     if (action === "push_config") return json({ publicKey: VAPID_PUBLIC_KEY });
     if (action === "push_subscribe" || action === "push_unsubscribe" || action === "notifications" || action === "notification_read") {
       if (!uuid(body.token)) return json({ error: "Identificação do participante inválida." }, 401);
-      const { data: owner } = await db.from("party_participants").select("id").eq("token_hash", await sha256(body.token)).single();
+      const owner = await participantByToken(db, body.token);
       if (!owner) return json({ error: "Participante não encontrado." }, 401);
       if (action === "push_subscribe") {
         const subscription = body.subscription;
@@ -93,7 +155,7 @@ Deno.serve(async (req) => {
     let participant: { id: string; name: string } | null = null;
     if (!admin) {
       if (!uuid(body.token)) return json({ error: "Informe seu nome para participar." }, 401);
-      const { data } = await db.from("party_participants").select("id,name").eq("token_hash", await sha256(body.token)).single();
+      const data = await participantByToken(db, body.token);
       if (!data) return json({ error: "Informe seu nome para participar." }, 401);
       participant = data;
     }
