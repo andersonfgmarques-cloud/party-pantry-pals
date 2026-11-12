@@ -2,17 +2,18 @@
   "name": "Festou!",
   "short_name": "Festou!",
   "lang": "pt-BR",
-  "start_url": "./",
+  "start_url": "./?source=pwa",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f8faf8",
   "theme_color": "#21613f",
   "icons": [
     {
-      "src": "festou-icon.svg",
+      "src": "./festou-icon.svg?v=4",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
-  ]
+  ],
+  "id": "./"
 }
