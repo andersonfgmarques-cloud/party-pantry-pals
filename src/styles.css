@@ -685,3 +685,34 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     max-width: min(240px, calc(100vw - 40px));
   }
 }
+
+
+/* Stable hook for the organizer's per-card management action on touch screens. */
+@media (max-width: 700px) {
+  .admin-controls {
+    display: flex !important;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+  }
+  .admin-controls .manage-product-button {
+    display: inline-flex !important;
+    flex: 0 0 auto !important;
+    width: max-content !important;
+    min-width: max-content !important;
+    max-width: 100%;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+    overflow-wrap: normal !important;
+    line-height: 1.2;
+    padding: 9px 12px;
+  }
+  .admin-controls [data-state],
+  .admin-controls .absolute {
+    max-width: calc(100vw - 32px);
+  }
+}
