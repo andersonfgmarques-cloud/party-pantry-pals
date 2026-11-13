@@ -99,14 +99,16 @@ Deno.serve(async (req) => {
     if (action === "pin_login") {
       const name = typeof body.name === "string" ? body.name.trim().replace(/\s+/g, " ") : "";
       if (name.length < 2 || name.length > 60 || typeof body.pin !== "string" || !/^\d{6}$/.test(body.pin)) return json({ error: "Informe seu nome e o PIN de 6 números." }, 400);
-      const nameHash = await sha256(name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR"));
+      const normalizedName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+      const nameHash = await sha256(normalizedName);
       const { data: attempt } = await db.from("party_pin_login_attempts").select("*").eq("name_hash", nameHash).maybeSingle();
       const now = Date.now();
       if (attempt?.locked_until && new Date(attempt.locked_until).getTime() > now) return json({ error: "Muitas tentativas. Aguarde 15 minutos e tente novamente." }, 429);
-      const { data: candidates, error: lookupError } = await db.from("party_participants").select("id,name,pin_hash,pin_salt").ilike("name", name).not("pin_hash", "is", null);
+      const { data: candidates, error: lookupError } = await db.from("party_participants").select("id,name,pin_hash,pin_salt").not("pin_hash", "is", null);
       if (lookupError) throw lookupError;
+      const matchingNames = (candidates ?? []).filter(candidate => candidate.name.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR") === normalizedName);
       const matches = [];
-      for (const candidate of candidates ?? []) {
+      for (const candidate of matchingNames) {
         if (candidate.pin_hash && candidate.pin_salt && safeEqual(await hashPin(body.pin, candidate.pin_salt), candidate.pin_hash)) matches.push(candidate);
       }
       if (matches.length !== 1) {
