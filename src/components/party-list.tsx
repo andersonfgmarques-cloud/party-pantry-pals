@@ -258,20 +258,8 @@ export function PartyList() {
     setModal('birthday');
   }
   async function addExpense(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const f = new FormData(e.currentTarget); const ok = await act({ action: 'expense_add', description: String(f.get('description')), amount: Number(f.get('amount')), paidBy: String(f.get('paidBy')) }, 'Despesa registrada!'); if (ok) (e.currentTarget as HTMLFormElement).reset(); }
-  function summary(pending = false) { return `${data.event.name}
-${dateLabel}
-
-` + data.categories.map(c => { const items = data.products.filter(p => p.category_id === c.id && (!pending || !['complete','received'].includes(itemStatus(p, reservedFor(p.id, data.reservations))))); return items.length ? `${c.name.toUpperCase()}
-` + items.map(p => { const reserved = reservedFor(p.id, data.reservations); const remaining = remainingFor(p, reserved); const peopleNames = data.reservations.filter(r => r.product_id === p.id).map(r => `${r.participant_name}: ${number(Number(r.quantity))} ${p.unit}`).join(', '); return `• ${p.name}: ${p.quantity === null ? 'quantidade a definir' : `${number(Number(p.quantity))} ${p.unit}`} | ${statusLabels[itemStatus(p, reserved)]}${remaining !== null ? ` | faltam ${number(remaining)} ${p.unit}` : ''}${peopleNames ? `
-  ${peopleNames}` : ''}`; }).join('
-') : ''; }).filter(Boolean).join('
-
-'); }
-  function share(pending = false) { const text = pending ? `${summary(true)}
-
-Participe: ${window.location.origin}${import.meta.env.BASE_URL}` : `🌿 Festou!
-Uma festa feita por todos! Escolha o que você vai levar:
-${window.location.origin}${import.meta.env.BASE_URL}`; window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer'); }
+  function summary(pending = false) { return `${data.event.name}\n${dateLabel}\n\n` + data.categories.map(c => { const items = data.products.filter(p => p.category_id === c.id && (!pending || !['complete','received'].includes(itemStatus(p, reservedFor(p.id, data.reservations))))); return items.length ? `${c.name.toUpperCase()}\n` + items.map(p => { const reserved = reservedFor(p.id, data.reservations); const remaining = remainingFor(p, reserved); const peopleNames = data.reservations.filter(r => r.product_id === p.id).map(r => `${r.participant_name}: ${number(Number(r.quantity))} ${p.unit}`).join(', '); return `• ${p.name}: ${p.quantity === null ? 'quantidade a definir' : `${number(Number(p.quantity))} ${p.unit}`} | ${statusLabels[itemStatus(p, reserved)]}${remaining !== null ? ` | faltam ${number(remaining)} ${p.unit}` : ''}${peopleNames ? `\n  ${peopleNames}` : ''}`; }).join('\n') : ''; }).filter(Boolean).join('\n\n'); }
+  function share(pending = false) { const text = pending ? `${summary(true)}\n\nParticipe: ${window.location.origin}${import.meta.env.BASE_URL}` : `🌿 Festou!\nUma festa feita por todos! Escolha o que você vai levar:\n${window.location.origin}${import.meta.env.BASE_URL}`; window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer'); }
   async function exportReportPdf(title: string, content: string[], filename: string) {
     try {
       const { jsPDF } = await import('jspdf');
@@ -358,8 +346,7 @@ ${window.location.origin}${import.meta.env.BASE_URL}`; window.open(`https://wa.m
     }) : ['Nenhuma contribuição registrada para este participante.'];
     await exportReportPdf(`Lista individual: ${p.name}`, lines, `contribuicoes-${p.name.trim().toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, '-')}.pdf`);
   }
-  async function exportPdf() { await exportReportPdf('Lista completa da festa', summary().split('\
-'), 'festou.pdf'); }
+  async function exportPdf() { await exportReportPdf('Lista completa da festa', summary().split('\\n'), 'festou.pdf'); }
   async function showHistory() { setBusy(true); try { const result = await mutate({ data: { action: 'audit_history', password } }); setHistory((result as unknown as { history: typeof history }).history ?? []); setModal('history'); } catch(e) { toast.error(e instanceof Error ? e.message : 'Erro ao carregar histórico.'); } finally { setBusy(false); } }
   async function showParticipants() { setBusy(true); try { const result = await mutate({ data: { action: 'participants', password } }); setParticipants(result.participants); setModal('participants'); } catch(e) { toast.error(e instanceof Error ? e.message : 'Erro ao carregar participantes.'); } finally { setBusy(false); } }
   async function openStats(kind: StatsKind) {
@@ -379,12 +366,8 @@ ${window.location.origin}${import.meta.env.BASE_URL}`; window.open(`https://wa.m
   async function deleteParticipant(p: { id: string; name: string }) {
     if (!password) { toast.error('Ação exclusiva do organizador.'); return; }
     const count = data.reservations.filter(r => r.participant_id === p.id).length;
-    const detail = count ? `
-
-As ${count} contribuições dessa pessoa também serão liberadas.` : '';
-    if (!window.confirm(`Excluir ${p.name} da lista de participantes?${detail}
-
-Essa ação não pode ser desfeita.`)) return;
+    const detail = count ? `\n\nAs ${count} contribuições dessa pessoa também serão liberadas.` : '';
+    if (!window.confirm(`Excluir ${p.name} da lista de participantes?${detail}\n\nEssa ação não pode ser desfeita.`)) return;
     const ok = await act({ action: 'participant_delete', id: p.id }, `${p.name} foi removido(a) da lista.`);
     if (ok) setParticipants(current => current.filter(item => item.id !== p.id));
   }
@@ -483,7 +466,7 @@ Essa ação não pode ser desfeita.`)) return;
       <Button type="submit" disabled={busy}>{busy ? 'Salvando...' : 'Salvar alterações'}</Button></form>}
     {modal === 'finance' && <div className="space-y-4"><div className="rounded-lg bg-secondary p-4"><p className="text-xs text-muted-foreground">Total registrado</p><strong className="text-2xl">R$ {number(data.expenses.reduce((sum, expense) => sum + Number(expense.amount), 0))}</strong></div><form className="modal-form" onSubmit={addExpense}><label>Descrição<input name="description" required maxLength={120} placeholder="Ex.: compra de bebidas"/></label><label>Valor (R$)<input name="amount" type="number" min="0.01" step="0.01" required/></label><label>Quem pagou<input name="paidBy" required maxLength={60} placeholder="Nome do responsável"/></label><Button type="submit" disabled={busy}>Registrar despesa</Button></form><div className="max-h-56 overflow-y-auto">{data.expenses.map(expense => <div className="reservation-row" key={expense.id}><div><strong>{expense.description}</strong><p className="help-text">Pago por {expense.paid_by}</p></div><div className="text-right"><strong>R$ {number(Number(expense.amount))}</strong><Button size="sm" variant="ghost" onClick={() => act({ action: 'expense_delete', id: expense.id }, 'Despesa removida.')}>Excluir</Button></div></div>)}{!data.expenses.length && <p className="help-text py-4">Nenhuma despesa registrada.</p>}</div></div>}
     {modal === 'participants' && <div className="max-h-96 overflow-y-auto">{participants.map(p => <div className="reservation-row" key={p.id}><span>{p.name}</span><div className="flex items-center gap-2"><span className="text-muted-foreground text-xs">{data.reservations.filter(r => r.participant_id === p.id).length} contribuições</span><Button size="icon" variant="ghost" title={`Excluir ${p.name}`} aria-label={`Excluir participante ${p.name}`} disabled={busy} onClick={() => deleteParticipant(p)}><Trash2 size={16}/></Button></div></div>)}{!participants.length && <p className="help-text py-6">Ainda não há participantes.</p>}</div>}
-    {modal === 'history' && <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-1">
+    {modal === 'history' && <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-1}>
       {history.length ? history.map(item => <article key={item.id} className="rounded-xl border border-border bg-card p-3">
         <div className="flex items-start justify-between gap-3"><div className="min-w-0"><strong className="text-sm">{item.action}</strong><p className="text-sm text-muted-foreground">{item.entity_name ?? 'Registro'} · {item.actor_name}</p></div><time className="shrink-0 text-xs text-muted-foreground">{new Date(item.created_at).toLocaleString('pt-BR')}</time></div>
       </article>) : <p className="help-text py-6 text-center">Nenhuma atividade registrada ainda. As próximas alterações aparecerão aqui.</p>}
