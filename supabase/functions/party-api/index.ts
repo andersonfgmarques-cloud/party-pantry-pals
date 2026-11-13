@@ -171,7 +171,11 @@ Deno.serve(async (req) => {
       participant = data;
     }
     if (action === "verify") return json({ ok: true, participants: [] });
-    if (action === "audit_history") {\n      const { data, error } = await db.from("party_audit_log").select("id,action,entity_type,entity_name,actor_name,details,created_at").order("created_at", { ascending: false }).limit(200);\n      if (error) throw error;\n      return json({ ok: true, history: data ?? [] });\n    }
+    if (action === "audit_history") {
+      const { data, error } = await db.from("party_audit_log").select("id,action,entity_type,entity_name,actor_name,details,created_at").order("created_at", { ascending: false }).limit(200);
+      if (error) throw error;
+      return json({ ok: true, history: data ?? [] });
+    }
     if (action === "participants") {
       const { data, error } = await db.from("party_participants").select("id,name,created_at").order("name");
       if (error) throw error;
