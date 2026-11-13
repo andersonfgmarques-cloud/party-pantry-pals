@@ -53,18 +53,18 @@ async function invokePartyApi<T>(body: Record<string, unknown>): Promise<T> {
 }
 
 export async function getParty(): Promise<PartyData> {
-  const [event, categories, products, reservations, birthdays] = await Promise.all([
-    supabase.from('party_event').select('id,name,party_date,party_end_date,party_dates,guests').eq('id', 1).single(),
+  const [eventResult, categories, products, reservations, birthdays] = await Promise.all([
+    invokePartyApi<{ event: Omit<Database['public']['Tables']['party_event']['Row'], 'location_url'> }>({ action: 'public_event' }),
     supabase.from('party_categories').select('*').order('id'),
     supabase.from('party_products').select('*').order('created_at').order('name'),
     supabase.from('party_reservations').select('*').order('created_at'),
     supabase.from('party_birthday_people').select('*').order('name'),
   ]);
-  for (const result of [event, categories, products, reservations, birthdays]) {
+  for (const result of [categories, products, reservations, birthdays]) {
     if (result.error) throw new Error('Não foi possível carregar a lista. Verifique a conexão e as permissões do Supabase.');
   }
-  if (!event.data) throw new Error('Evento não encontrado.');
-  return { event: { ...event.data, location_url: null }, categories: categories.data ?? [], products: products.data ?? [], reservations: reservations.data ?? [], birthdays: birthdays.data ?? [] };
+  if (!eventResult.event) throw new Error('Evento não encontrado.');
+  return { event: { ...eventResult.event, location_url: null }, categories: categories.data ?? [], products: products.data ?? [], reservations: reservations.data ?? [], birthdays: birthdays.data ?? [] };
 }
 
 export async function getPartyLocation(token?: string, password?: string): Promise<string | null> {
