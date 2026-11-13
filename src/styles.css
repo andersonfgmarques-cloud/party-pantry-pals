@@ -443,3 +443,53 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .footer-credit strong { color:var(--foreground); font-weight:700; }
 .footer-credit small { font-size:10px; }
 @media (max-width:700px) { .site-footer .party-container { align-items:flex-start; } .footer-brand { width:100%; } .site-footer .party-container > .flex:last-child { width:100%; gap:5px; } .site-footer .party-container > .flex:last-child button { padding-inline:7px; font-size:10px; } }
+
+
+/* Consistent scrolling for long dialogs on desktop and mobile */
+[data-radix-dialog-content],
+[role="dialog"] {
+  box-sizing: border-box;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--primary) 58%, transparent) transparent;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+[data-radix-dialog-content]::-webkit-scrollbar,
+[role="dialog"]::-webkit-scrollbar {
+  width: 7px;
+}
+
+[data-radix-dialog-content]::-webkit-scrollbar-track,
+[role="dialog"]::-webkit-scrollbar-track {
+  background: transparent;
+  margin-block: 10px;
+}
+
+[data-radix-dialog-content]::-webkit-scrollbar-thumb,
+[role="dialog"]::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--primary) 48%, transparent);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+[data-radix-dialog-content]::-webkit-scrollbar-thumb:hover,
+[role="dialog"]::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+  background-clip: padding-box;
+}
+
+@media (max-width: 700px) {
+  [data-radix-dialog-content],
+  [role="dialog"] {
+    max-height: calc(100dvh - 24px);
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+}
