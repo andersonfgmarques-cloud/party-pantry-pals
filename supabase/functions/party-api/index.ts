@@ -200,6 +200,20 @@ Deno.serve(async (req) => {
       if (!data) return json({ error: "Informe seu nome para participar." }, 401);
       participant = data;
     }
+    if (action === "birthday_photos") {
+      if (!admin && !participant) return json({ error: "Identifique-se como participante para visualizar as fotos." }, 401);
+      const { data: people, error: peopleError } = await db.from("party_birthday_people").select("id,name,photo_path").order("name");
+      if (peopleError) throw peopleError;
+      const paths = (people ?? []).map(person => person.photo_path);
+      if (!paths.length) return json({ photos: [] });
+      const { data: signed, error: signedError } = await db.storage.from("party-birthday-photos").createSignedUrls(paths, 3600);
+      if (signedError) throw signedError;
+      const signedByPath = new Map((signed ?? []).map(item => [item.path, item.signedUrl]));
+      return json({ photos: (people ?? []).flatMap(person => {
+        const signedUrl = signedByPath.get(person.photo_path);
+        return signedUrl ? [{ id: person.id, name: person.name, photo_path: person.photo_path, signed_url: signedUrl }] : [];
+      }) });
+    }
     if (action === "verify") return json({ ok: true, participants: [] });
     if (action === "audit_history") {
       const { data, error } = await db.from("party_audit_log").select("id,action,entity_type,entity_name,actor_name,details,created_at").order("created_at", { ascending: false }).limit(200);
