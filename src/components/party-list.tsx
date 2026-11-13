@@ -72,7 +72,8 @@ export function PartyList() {
     return () => { supabase.removeChannel(channel); window.removeEventListener('focus', focus); window.removeEventListener('online', updateOnline); window.removeEventListener('offline', updateOnline); };
   }, [qc]);
   useEffect(() => {
-    if (modal !== 'finance' || !password) return;
+    if (!password) { setExpenses([]); return; }
+    if (modal !== 'finance') return;
     let active = true;
     getPartyExpenses(password).then(rows => { if (active) setExpenses(rows); }).catch(error => { if (active) toast.error(error instanceof Error ? error.message : 'Não foi possível carregar as despesas.'); });
     return () => { active = false; };
