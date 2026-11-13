@@ -76,6 +76,15 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const action = body?.action;
 
+    if (action === "event_location" && uuid(body.token)) {
+      const participant = await participantByToken(db, body.token);
+      if (participant) {
+        const { data, error } = await db.from("party_event").select("location_url").eq("id", 1).single();
+        if (error) throw error;
+        return json({ locationUrl: data?.location_url ?? null });
+      }
+    }
+
     if (action === "participant_logout") {
       if (!uuid(body.token)) return json({ error: "Sessão de participante inválida." }, 400);
       const tokenHash = await sha256(body.token);
@@ -196,7 +205,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, participants: data ?? [] });
     }
     const admin = typeof body.password === "string" && body.password === organizerPassword;
-    const adminActions = ["edit", "delete", "received", "event", "verify", "participants", "audit_history", "expenses", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete"];
+    const adminActions = ["edit", "delete", "received", "event", "event_location", "verify", "participants", "audit_history", "expenses", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete"];
     if (adminActions.includes(action)) {
       const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
       const clientIp = req.headers.get("cf-connecting-ip")?.trim()
@@ -374,6 +383,10 @@ Deno.serve(async (req) => {
         if (error) throw error;
       }
       return json({ ok: true });
+    } else if (action === "event_location") {
+      const { data, error } = await db.from("party_event").select("location_url").eq("id", 1).single();
+      if (error) throw error;
+      return json({ locationUrl: data?.location_url ?? null });
     } else if (action === "event") {
       const locationUrl = body.locationUrl;
       if (locationUrl !== undefined && locationUrl !== null && locationUrl !== "") {
