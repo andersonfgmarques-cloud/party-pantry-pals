@@ -210,14 +210,24 @@ export function PartyList() {
   }
   async function logoutCurrentParticipant() {
     if (!person) return;
+    const token = person.token;
+    // Encerra primeiro a sessão local para que o nome desapareça imediatamente,
+    // mesmo se a chamada de rede falhar ou ficar indisponível.
+    try { localStorage.removeItem('party-identity'); } catch { /* storage may be unavailable */ }
+    setPerson(null);
+    setView('all');
+    setModal(null);
+    setPendingModal(null);
+    setIdentityMode('login');
     setBusy(true);
     try {
-      await logoutParticipant(person.token);
-      localStorage.removeItem('party-identity');
-      setPerson(null); setView('all'); setModal(null); setPendingModal(null);
-      toast.success('Você saiu da sua conta. Seu cadastro e suas contribuições foram mantidos.');
-    } catch (error) { toast.error(error instanceof Error ? error.message : 'Não foi possível encerrar a sessão.'); }
-    finally { setBusy(false); }
+      await logoutParticipant(token);
+      toast.success('Você saiu da sua conta. Seu nome foi removido deste aparelho; cadastro e contribuições foram mantidos.');
+    } catch {
+      toast.warning('A sessão foi encerrada neste aparelho. Não foi possível confirmar a revogação no servidor; entre novamente com seu PIN se necessário.');
+    } finally {
+      setBusy(false);
+    }
   }
   async function submitProduct(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const f = new FormData(e.currentTarget); const name = String(f.get('name')).trim(); const normalize = (value: string) => value.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, ' ').trim(); if (modal === 'add') { const duplicate = data.products.find(product => normalize(product.name) === normalize(name)); if (duplicate) { const categoryName = data.categories.find(item => item.id === duplicate.category_id)?.name ?? 'outra categoria'; const detail = `Já existe um item chamado \"${duplicate.name}\" na categoria \"${categoryName}\" (${duplicate.unit}).`; if (!window.confirm(`${detail} Deseja adicionar mesmo assim?`)) return; } } const ok = await act({ action: modal === 'edit' ? 'edit' : 'add', id: modal === 'edit' ? selected?.id : undefined, name, categoryId: Number(f.get('category')), quantity: f.get('quantity') ? Number(f.get('quantity')) : null, unit: String(f.get('unit')), note: String(f.get('note') ?? '') }, modal === 'edit' ? 'Item atualizado!' : 'Item adicionado à lista!'); if (ok) setModal(null); }
   async function submitReserve(e: FormEvent<HTMLFormElement>) { e.preventDefault(); if (!selected) return; const f = new FormData(e.currentTarget); const source = f.get('source') === 'home' ? 'home' : 'buy'; const ok = await act({ action: 'reserve', id: selected.id, quantity: Number(f.get('quantity')), source, participantId: password ? String(f.get('participant')) : undefined }, 'Combinado! Sua contribuição foi reservada.'); if (ok) setModal(null); }
