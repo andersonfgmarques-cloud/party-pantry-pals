@@ -289,11 +289,17 @@ export function PartyList() {
     setBusy(true); try { await setParticipantPin(person.token, pin); toast.success('PIN criado! Você permanecerá conectado neste aparelho e poderá entrar em outros aparelhos com ele.'); setView('mine'); setModal(pendingModal); setPendingModal(null); }
     catch (error) { toast.error(error instanceof Error ? error.message : 'Não foi possível criar o PIN.'); } finally { setBusy(false); }
   }
-  function logoutCurrentParticipant() {
-    if (!person) return;
-    const token = person.token;
-    // O logout local não depende da resposta do servidor: limpa o armazenamento
-    // e recarrega a aplicação para reconstruir a interface sem participante ativo.
+  async function logoutCurrentParticipant() {
+    if (!person || busy) return;
+    setBusy(true);
+    // Encerra a sessão deste aparelho no servidor antes de recarregar.
+    // O cadastro, o PIN e todas as contribuições permanecem vinculados ao participante.
+    let serverLogoutConfirmed = true;
+    try {
+      await logoutParticipant(person.token);
+    } catch {
+      serverLogoutConfirmed = false;
+    }
     try {
       localStorage.removeItem('party-identity');
       sessionStorage.removeItem('party-identity');
@@ -304,9 +310,9 @@ export function PartyList() {
     setPendingModal(null);
     setIdentityMode('login');
     setBusy(false);
-    void logoutParticipant(token).catch(() => {
-      toast.warning('A sessão foi encerrada neste aparelho. A confirmação do servidor não foi recebida.');
-    });
+    if (!serverLogoutConfirmed) {
+      toast.warning('Você saiu deste aparelho, mas não foi possível confirmar o encerramento da sessão no servidor.');
+    }
     window.location.reload();
   }
   async function submitProduct(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const f = new FormData(e.currentTarget); const name = String(f.get('name')).trim(); const normalize = (value: string) => value.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, ' ').trim(); if (modal === 'add') { const duplicate = data.products.find(product => normalize(product.name) === normalize(name)); if (duplicate) { const categoryName = data.categories.find(item => item.id === duplicate.category_id)?.name ?? 'outra categoria'; const detail = `Já existe um item chamado \"${duplicate.name}\" na categoria \"${categoryName}\" (${duplicate.unit}).`; if (!window.confirm(`${detail} Deseja adicionar mesmo assim?`)) return; } } const ok = await act({ action: modal === 'edit' ? 'edit' : 'add', id: modal === 'edit' ? selected?.id : undefined, name, categoryId: Number(f.get('category')), quantity: f.get('quantity') ? Number(f.get('quantity')) : null, unit: String(f.get('unit')), note: String(f.get('note') ?? '') }, modal === 'edit' ? 'Item atualizado!' : 'Item adicionado à lista!'); if (ok) setModal(null); }
@@ -597,7 +603,13 @@ export function PartyList() {
       <div className="max-h-56 space-y-2 overflow-y-auto">
         {data.reservations.filter(r => r.participant_id === person.id).map(r => {
           const product = data.products.find(p => p.id === r.product_id);
-          return <div key={r.id} className="reservation-row"><div><strong>{product?.name ?? 'Item da festa'}</strong><p className="help-text">{number(Number(r.quantity))} {product?.unit ?? ''}</p></div></div>;
+          return <div key={r.id} className="reservation-row items-center gap-3">
+            <div className="min-w-0 flex-1"><strong>{product?.name ?? 'Item da festa'}</strong><p className="help-text">{number(Number(r.quantity))} {product?.unit ?? ''}</p><p className="help-text">{({ planned: 'Vai comprar', purchased: 'Comprado', at_home: 'Já tem em casa', delivered: 'Entregue' } as const)[r.status ?? (r.source === 'home' ? 'at_home' : 'planned')]}</p></div>
+            <div className="flex shrink-0 flex-wrap justify-end gap-1">
+              {product && <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => { setAdjustingReservation({ id: r.id, quantity: Number(r.quantity), productName: product.name, unit: product.unit }); setModal('adjust'); }}>Editar quantidade</Button>}
+              <Button type="button" size="sm" variant="ghost" className="text-destructive" disabled={busy} onClick={() => { if (window.confirm(`Deseja retirar sua contribuição de “${product?.name ?? 'este item'}”? O item voltará a ficar disponível.`)) void act({ action: 'cancel', id: r.id }, 'Sua contribuição foi retirada e o item voltou a ficar disponível.').then(ok => { if (ok) setModal('account'); }); }}>Retirar</Button>
+            </div>
+          </div>;
         })}
         {!data.reservations.some(r => r.participant_id === person.id) && <p className="help-text">Você ainda não assumiu nenhum item.</p>}
       </div>
