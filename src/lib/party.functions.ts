@@ -8,7 +8,7 @@ const mutation = z.object({
   token: z.string().uuid().optional(),
   password: z.string().max(200).optional(),
   pin: z.string().optional(),
-  action: z.enum(['participant_directory','participant_rename','pin_set','pin_login','participant_logout','add','reserve','cancel','edit','delete','received','event','verify','participants','reservation_status','adjust_reservation','push_config','push_subscribe','push_unsubscribe','push_status','notifications','notification_read','audit_history','expenses','expense_add','expense_delete','birthday_add','birthday_edit','birthday_delete','birthday_photos','participant_delete']),
+  action: z.enum(['participant_directory','participant_role','collaborator_set','participant_rename','pin_set','pin_login','participant_logout','add','reserve','cancel','edit','delete','received','event','verify','participants','reservation_status','adjust_reservation','push_config','push_subscribe','push_unsubscribe','push_status','notifications','notification_read','audit_history','expenses','expense_add','expense_delete','birthday_add','birthday_edit','birthday_delete','birthday_photos','participant_delete']),
   id: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(100).optional(),
   categoryId: z.number().int().min(1).max(6).optional(),
@@ -32,7 +32,7 @@ const mutation = z.object({
   photoData: z.string().max(4200000).optional(),
 });
 type Mutation = z.infer<typeof mutation>;
-type Participant = { id: string; name: string; created_at: string | null };
+type Participant = { id: string; name: string; created_at: string | null; is_collaborator: boolean };
 
 async function invokePartyApi<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke('party-api', { body });
@@ -108,7 +108,7 @@ export async function getPushPublicKey(): Promise<string> {
 export async function setParticipantPin(token: string, pin: string): Promise<void> {
   await invokePartyApi({ action: 'pin_set', token, pin });
 }
-export async function loginParticipant(name: string, pin: string): Promise<{ id: string; name: string; token: string }> {
+export async function loginParticipant(name: string, pin: string): Promise<{ id: string; name: string; token: string; isCollaborator: boolean }> {
   return invokePartyApi({ action: 'pin_login', name, pin });
 }
 export async function logoutParticipant(token: string): Promise<void> {
