@@ -277,8 +277,8 @@ export function PartyList() {
     try {
       const p = await loginParticipant(String(form.get('name') ?? ''), String(form.get('pin') ?? ''));
       setPerson(p); localStorage.setItem('party-identity', JSON.stringify(p));
-      await qc.invalidateQueries({ queryKey: ['party'] }); setView('mine'); setModal(null);
-      toast.success('Bem-vindo de volta, ' + p.name + '!');
+      await qc.invalidateQueries({ queryKey: ['party'] }); setView('mine'); setModal('account');
+      toast.success('Bem-vindo de volta, ' + p.name + '! Suas contribuições foram recuperadas.');
     } catch (error) { toast.error(error instanceof Error ? error.message : 'Não foi possível entrar.'); }
     finally { setBusy(false); }
   }
@@ -604,7 +604,7 @@ export function PartyList() {
         {data.reservations.filter(r => r.participant_id === person.id).map(r => {
           const product = data.products.find(p => p.id === r.product_id);
           return <div key={r.id} className="reservation-row items-center gap-3">
-            <div className="min-w-0 flex-1"><strong>{product?.name ?? 'Item da festa'}</strong><p className="help-text">{number(Number(r.quantity))} {product?.unit ?? ''}</p><p className="help-text">{({ planned: 'Vai comprar', purchased: 'Comprado', at_home: 'Já tem em casa', delivered: 'Entregue' } as const)[r.status ?? (r.source === 'home' ? 'at_home' : 'planned')]}</p></div>
+            <div className="min-w-0 flex-1"><strong>{product?.name ?? 'Item da festa'}</strong><p className="help-text">{number(Number(r.quantity))} {product?.unit ?? ''}</p><label className="mt-1 block text-xs text-muted-foreground">Situação<select aria-label={`Situação da contribuição de ${product?.name ?? 'item'}`} className="mt-1 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground" value={r.status ?? (r.source === 'home' ? 'at_home' : 'planned')} onChange={e => void act({ action: 'reservation_status', id: r.id, status: e.target.value as 'planned' | 'purchased' | 'at_home' | 'delivered' }, 'Situação da contribuição atualizada.')}><option value="planned">Vou comprar</option><option value="purchased">Comprado</option><option value="at_home">Já tenho em casa</option><option value="delivered">Entregue</option></select></label></div>
             <div className="flex shrink-0 flex-wrap justify-end gap-1">
               {product && <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => { setAdjustingReservation({ id: r.id, quantity: Number(r.quantity), productName: product.name, unit: product.unit }); setModal('adjust'); }}>Editar quantidade</Button>}
               <Button type="button" size="sm" variant="ghost" className="text-destructive" disabled={busy} onClick={() => { if (window.confirm(`Deseja retirar sua contribuição de “${product?.name ?? 'este item'}”? O item voltará a ficar disponível.`)) void act({ action: 'cancel', id: r.id }, 'Sua contribuição foi retirada e o item voltou a ficar disponível.').then(ok => { if (ok) setModal('account'); }); }}>Retirar</Button>
