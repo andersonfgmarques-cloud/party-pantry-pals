@@ -67,7 +67,7 @@ export function PartyList() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'party_participants' }, () => { void refreshDirectory(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'party_reservations' }, payload => {
         refresh();
-        if (person?.token) getPartyNotifications(person.token).then(setNotifications).catch(() => {});
+        if (person?.token) window.setTimeout(() => getPartyNotifications(person.token).then(setNotifications).catch(() => {}), 700);
         if (payload.eventType === 'INSERT') {
           const row = payload.new as { participant_name?: string; product_id?: string; quantity?: number };
           const current = qc.getQueryData<{ products: Product[] }>(['party']);
@@ -199,7 +199,8 @@ export function PartyList() {
       const registration = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL });
       const key = await getPushPublicKey();
       const applicationServerKey = Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
-      const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
+      const existingSubscription = await registration.pushManager.getSubscription();
+      const subscription = existingSubscription ?? await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
       await savePushSubscription(person.token, subscription);
       const status = await getPushStatus(person.token, subscription.endpoint);
       setPushEnabled(status.enabled);
