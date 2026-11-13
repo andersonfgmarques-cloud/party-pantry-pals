@@ -50,7 +50,7 @@ export function PartyList() {
   const [rouletteSpinning, setRouletteSpinning] = useState(false);
   const [adjustingReservation, setAdjustingReservation] = useState<{ id: string; quantity: number; productName: string; unit: string } | null>(null);
   useEffect(() => {
-    try { const stored = localStorage.getItem('party-identity'); if (stored) { const p = JSON.parse(stored); if (p.token && p.name && p.id) setPerson(p); } } catch { /* unavailable storage */ }
+    try { const stored = localStorage.getItem('party-identity'); if (stored) { const p = JSON.parse(stored); if (p.token && p.name && p.id) { setPerson(p); toast.message(`Olá, ${p.name}!`, { description: 'Que bom ter você por aqui. Continue acompanhando e organizando a festa.', duration: 3500 }); } } } catch { /* unavailable storage */ }
     const updateOnline = () => setOnline(navigator.onLine);
     updateOnline(); window.addEventListener('online', updateOnline); window.addEventListener('offline', updateOnline);
     const refresh = () => qc.invalidateQueries({ queryKey: ['party'] });
@@ -197,7 +197,7 @@ export function PartyList() {
       const p = await loginParticipant(String(form.get('name') ?? ''), String(form.get('pin') ?? ''));
       setPerson(p); localStorage.setItem('party-identity', JSON.stringify(p));
       await qc.invalidateQueries({ queryKey: ['party'] }); setView('mine'); setModal(null);
-      toast.success('Bem-vindo de volta, ' + p.name + '!');
+      toast.message(`Bem-vindo de volta, ${p.name}!`, { description: 'Suas contribuições estão prontas para você acompanhar.', duration: 3500 });
     } catch (error) { toast.error(error instanceof Error ? error.message : 'Não foi possível entrar.'); }
     finally { setBusy(false); }
   }
@@ -205,7 +205,7 @@ export function PartyList() {
     e.preventDefault(); if (!person) return; const form = new FormData(e.currentTarget);
     const pin = String(form.get('pin') ?? ''); const confirmation = String(form.get('confirmation') ?? '');
     if (pin !== confirmation) { toast.error('Os PINs não conferem.'); return; }
-    setBusy(true); try { await setParticipantPin(person.token, pin); toast.success('PIN criado! Você permanecerá conectado neste aparelho e poderá entrar em outros aparelhos com ele.'); setView('mine'); setModal(pendingModal); setPendingModal(null); }
+    setBusy(true); try { await setParticipantPin(person.token, pin); toast.success(`Cadastro concluído, ${person.name}!`, { description: 'Seu PIN foi criado. Você permanecerá conectado neste aparelho e poderá entrar em outros aparelhos com ele.', duration: 4500 }); setView('mine'); setModal(pendingModal); setPendingModal(null); }
     catch (error) { toast.error(error instanceof Error ? error.message : 'Não foi possível criar o PIN.'); } finally { setBusy(false); }
   }
   function logoutCurrentParticipant() {
