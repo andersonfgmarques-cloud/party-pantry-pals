@@ -159,7 +159,40 @@ Deno.serve(async (req) => {
     }
     const admin = typeof body.password === "string" && body.password === organizerPassword;
     const adminActions = ["edit", "delete", "received", "event", "verify", "participants", "audit_history", "expenses", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete"];
-    if (adminActions.includes(action) && !admin) return json({ error: "Senha incorreta ou acesso exclusivo do organizador." }, 401);
+    if (adminActions.includes(action)) {
+      const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+      const clientIp = req.headers.get("cf-connecting-ip")?.trim()
+        || req.headers.get("x-real-ip")?.trim()
+        || forwardedFor;
+      if (!clientIp) return json({ error: "Não foi possível validar a origem da conexão. Tente novamente." }, 503);
+      const ipHash = await sha256(`party-admin-rate-limit:${clientIp}:${organizerPassword}`);
+      const { data: checkRows, error: checkError } = await db.rpc("party_admin_login_guard", {
+        p_ip_hash: ipHash,
+        p_action: "check",
+      });
+      if (checkError) throw checkError;
+      const check = Array.isArray(checkRows) ? checkRows[0] : checkRows;
+      if (check?.is_locked) {
+        return json({ error: "Muitas tentativas de acesso. Aguarde 15 minutos antes de tentar novamente.", retryAfter: check.retry_after_seconds }, 429);
+      }
+      if (!admin) {
+        const { data: failedRows, error: failedError } = await db.rpc("party_admin_login_guard", {
+          p_ip_hash: ipHash,
+          p_action: "fail",
+        });
+        if (failedError) throw failedError;
+        const failed = Array.isArray(failedRows) ? failedRows[0] : failedRows;
+        if (failed?.is_locked) {
+          return json({ error: "Limite de tentativas atingido. Acesso bloqueado por 15 minutos.", retryAfter: failed.retry_after_seconds }, 429);
+        }
+        return json({ error: "Senha incorreta ou acesso exclusivo do organizador." }, 401);
+      }
+      const { error: resetError } = await db.rpc("party_admin_login_guard", {
+        p_ip_hash: ipHash,
+        p_action: "reset",
+      });
+      if (resetError) throw resetError;
+    }
     let participant: { id: string; name: string } | null = null;
     if (!admin) {
       if (!uuid(body.token)) return json({ error: "Informe seu nome para participar." }, 401);
