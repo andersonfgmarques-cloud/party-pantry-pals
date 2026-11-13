@@ -369,8 +369,17 @@ export function PartyList() {
     if (kind === 'people') {
       setBusy(true);
       try {
-        const result = await mutate({ data: { action: 'public_participants' } });
-        setParticipants(result.participants);
+        const uniqueParticipants = new Map<string, { id: string; name: string; created_at: null }>();
+        data.reservations.forEach(reservation => {
+          if (!uniqueParticipants.has(reservation.participant_id)) {
+            uniqueParticipants.set(reservation.participant_id, {
+              id: reservation.participant_id,
+              name: reservation.participant_name,
+              created_at: null,
+            });
+          }
+        });
+        setParticipants([...uniqueParticipants.values()]);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Não foi possível carregar os participantes.');
         return;
