@@ -208,26 +208,25 @@ export function PartyList() {
     setBusy(true); try { await setParticipantPin(person.token, pin); toast.success('PIN criado! Você permanecerá conectado neste aparelho e poderá entrar em outros aparelhos com ele.'); setView('mine'); setModal(pendingModal); setPendingModal(null); }
     catch (error) { toast.error(error instanceof Error ? error.message : 'Não foi possível criar o PIN.'); } finally { setBusy(false); }
   }
-  async function logoutCurrentParticipant() {
+  function logoutCurrentParticipant() {
     if (!person) return;
     const token = person.token;
-    // Encerra primeiro a sessão local para que o nome desapareça imediatamente,
-    // mesmo se a chamada de rede falhar ou ficar indisponível.
-    try { localStorage.removeItem('party-identity'); } catch { /* storage may be unavailable */ }
+    // O logout local não depende da resposta do servidor: limpa o armazenamento
+    // e recarrega a aplicação para reconstruir a interface sem participante ativo.
+    try {
+      localStorage.removeItem('party-identity');
+      sessionStorage.removeItem('party-identity');
+    } catch { /* storage may be unavailable */ }
     setPerson(null);
     setView('all');
     setModal(null);
     setPendingModal(null);
     setIdentityMode('login');
-    setBusy(true);
-    try {
-      await logoutParticipant(token);
-      toast.success('Você saiu da sua conta. Seu nome foi removido deste aparelho; cadastro e contribuições foram mantidos.');
-    } catch {
-      toast.warning('A sessão foi encerrada neste aparelho. Não foi possível confirmar a revogação no servidor; entre novamente com seu PIN se necessário.');
-    } finally {
-      setBusy(false);
-    }
+    setBusy(false);
+    void logoutParticipant(token).catch(() => {
+      toast.warning('A sessão foi encerrada neste aparelho. A confirmação do servidor não foi recebida.');
+    });
+    window.location.reload();
   }
   async function submitProduct(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const f = new FormData(e.currentTarget); const name = String(f.get('name')).trim(); const normalize = (value: string) => value.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, ' ').trim(); if (modal === 'add') { const duplicate = data.products.find(product => normalize(product.name) === normalize(name)); if (duplicate) { const categoryName = data.categories.find(item => item.id === duplicate.category_id)?.name ?? 'outra categoria'; const detail = `Já existe um item chamado \"${duplicate.name}\" na categoria \"${categoryName}\" (${duplicate.unit}).`; if (!window.confirm(`${detail} Deseja adicionar mesmo assim?`)) return; } } const ok = await act({ action: modal === 'edit' ? 'edit' : 'add', id: modal === 'edit' ? selected?.id : undefined, name, categoryId: Number(f.get('category')), quantity: f.get('quantity') ? Number(f.get('quantity')) : null, unit: String(f.get('unit')), note: String(f.get('note') ?? '') }, modal === 'edit' ? 'Item atualizado!' : 'Item adicionado à lista!'); if (ok) setModal(null); }
   async function submitReserve(e: FormEvent<HTMLFormElement>) { e.preventDefault(); if (!selected) return; const f = new FormData(e.currentTarget); const source = f.get('source') === 'home' ? 'home' : 'buy'; const ok = await act({ action: 'reserve', id: selected.id, quantity: Number(f.get('quantity')), source, participantId: password ? String(f.get('participant')) : undefined }, 'Combinado! Sua contribuição foi reservada.'); if (ok) setModal(null); }
@@ -527,7 +526,7 @@ export function PartyList() {
         {!data.reservations.some(r => r.participant_id === person.id) && <p className="help-text">Você ainda não assumiu nenhum item.</p>}
       </div>
       <Button type="button" className="w-full" onClick={() => { setView('mine'); setModal(null); }}>Ver minhas contribuições</Button>
-      <Button type="button" variant="outline" className="w-full" disabled={busy} onClick={() => void logoutCurrentParticipant()}><LogOut size={16}/>Sair da minha conta</Button>
+      <button type="button" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-3 font-medium text-foreground shadow-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={logoutCurrentParticipant}><LogOut size={16}/>Sair da minha conta</button>
     </div>}
     {modal === 'qrcode' && <div className="modal-form">
       <div className="flex justify-center rounded-xl border border-border bg-white p-4">
