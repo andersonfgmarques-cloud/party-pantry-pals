@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { partyQuery } from '@/lib/party.queries';
-import { identifyParticipant, changeParty, loginParticipant, logoutParticipant, setParticipantPin, getPartyNotifications, markPartyNotificationRead, savePushSubscription, getPushPublicKey, getPartyExpenses, type PartyNotification } from '@/lib/party.functions';
+import { identifyParticipant, changeParty, loginParticipant, logoutParticipant, setParticipantPin, getPartyNotifications, markPartyNotificationRead, savePushSubscription, getPushPublicKey, getPartyExpenses, getPartyBirthdayPhotos, type PartyNotification } from '@/lib/party.functions';
 import { reservedFor, itemStatus, remainingFor, number, statusLabels, type Product, type Expense } from '@/lib/party';
 import garden from '@/assets/chacara-garden.jpg';
 
@@ -37,6 +37,7 @@ export function PartyList() {
   const [dashboardFilter, setDashboardFilter] = useState<'all' | 'unassigned' | 'partial' | 'guaranteed' | 'received' | 'undefined'>('all');
   const [notifications, setNotifications] = useState<PartyNotification[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [birthdayPhotos, setBirthdayPhotos] = useState<Record<string, string>>({});
   const [pushEnabled, setPushEnabled] = useState(false);
   const [partyDates, setPartyDates] = useState<string[]>([]);
   const [guests, setGuests] = useState('');
@@ -78,6 +79,14 @@ export function PartyList() {
     getPartyExpenses(password).then(rows => { if (active) setExpenses(rows); }).catch(error => { if (active) toast.error(error instanceof Error ? error.message : 'Não foi possível carregar as despesas.'); });
     return () => { active = false; };
   }, [modal, password]);
+  useEffect(() => {
+    if (!person?.token && !password) { setBirthdayPhotos({}); return; }
+    let active = true;
+    getPartyBirthdayPhotos(person?.token, password || undefined)
+      .then(photos => { if (active) setBirthdayPhotos(photos); })
+      .catch(error => { if (active) { setBirthdayPhotos({}); toast.error(error instanceof Error ? error.message : 'Não foi possível carregar as fotos.'); } });
+    return () => { active = false; };
+  }, [person?.token, password, data.birthdays]);
   useEffect(() => {
     if (modal !== 'settings') return;
     const event = data.event;
@@ -406,8 +415,9 @@ export function PartyList() {
         <div><h2 id="birthday-album-title"><Cake size={21}/> Aniversariantes</h2><p>Pessoas especiais que fazem parte da nossa história.</p></div>
         {password && <Button size="sm" onClick={() => openBirthdayEditor()}><Plus size={16}/> Adicionar</Button>}
       </div>
+      {data.birthdays.length && !person && !password && <p className="help-text">As fotos são protegidas. Informe seu nome para visualizar o álbum. <Button size="sm" variant="outline" onClick={() => open('identity')}>Identificar-me</Button></p>}
       {data.birthdays.length ? <div className="birthday-grid">{data.birthdays.map(person => <article className="birthday-card" key={person.id}>
-        <img src={supabase.storage.from('party-birthday-photos').getPublicUrl(person.photo_path).data.publicUrl} alt={person.name} loading="lazy"/>
+        {birthdayPhotos[person.photo_path] ? <img src={birthdayPhotos[person.photo_path]} alt={person.name} loading="lazy"/> : <div className="birthday-photo-placeholder" aria-label="Foto protegida"><LockKeyhole size={24}/></div>}
         <strong>{person.name}</strong>
         {password && <div className="birthday-actions"><Button size="sm" variant="outline" onClick={() => openBirthdayEditor(person)}><Pencil size={14}/> Editar</Button><Button size="sm" variant="ghost" onClick={() => { if (window.confirm(`Excluir ${person.name} do álbum de aniversariantes?`)) act({ action: 'birthday_delete', id: person.id }, 'Aniversariante removido.'); }}><Trash2 size={14}/> Excluir</Button></div>}
       </article>)}</div> : <div className="birthday-empty"><Cake size={28}/><p>Ainda não há aniversariantes cadastrados.</p>{password && <Button size="sm" variant="outline" onClick={() => openBirthdayEditor()}><ImagePlus size={16}/> Adicionar primeira foto</Button>}</div>}
