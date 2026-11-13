@@ -548,26 +548,32 @@ export function PartyList() {
         <span className="live-label"><span className="live-dot"/>{people} {people === 1 ? 'pessoa contribuindo' : 'pessoas contribuindo'}</span>
       </div>
       {data.reservations.length ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from(new Set(data.reservations.map(r => r.participant_name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR')))).map(participantKey => {
-            const entries = data.reservations.filter(r => r.participant_name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR') === participantKey);
-            const participantName = entries[0]?.participant_name.trim() ?? 'Participante';
-            return <article className="rounded-xl border border-border bg-card p-4 shadow-sm" key={participantKey}>
-              <div className="mb-3 flex items-center gap-2">
-                <span className="initial">{participantName.slice(0,1).toUpperCase()}</span>
-                <strong>{participantName}</strong>
-              </div>
-              <div className="space-y-2">
-                {entries.map(r => {
-                  const product = data.products.find(p => p.id === r.product_id);
-                  return <div className="flex items-start justify-between gap-3 border-t border-border pt-2 text-sm" key={r.id}>
-                    <span className="font-medium">{product?.name ?? 'Item da lista'}</span>
-                    <span className="shrink-0 text-muted-foreground">{number(Number(r.quantity))} {product?.unit ?? ''}</span>
-                  </div>;
-                })}
-              </div>
-            </article>;
-          })}
+        <div className="mx-auto max-w-3xl space-y-2">
+          {Array.from(new Set(data.reservations.map(r => r.participant_name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR'))))
+            .map(participantKey => {
+              const entries = data.reservations.filter(r => r.participant_name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR') === participantKey);
+              return { participantKey, entries, participantName: entries[0]?.participant_name.trim() ?? 'Participante' };
+            })
+            .sort((a, b) => a.participantName.localeCompare(b.participantName, 'pt-BR', { sensitivity: 'base' }))
+            .map(({ participantKey, entries, participantName }) => (
+              <details className="group rounded-xl border border-border bg-card shadow-sm" key={participantKey}>
+                <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-muted/50 [&::-webkit-details-marker]:hidden">
+                  <span className="initial shrink-0">{participantName.slice(0,1).toUpperCase()}</span>
+                  <strong className="min-w-0 flex-1 truncate">{participantName}</strong>
+                  <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">{entries.length} {entries.length === 1 ? 'item' : 'itens'}</span>
+                  <ChevronDown size={18} className="shrink-0 text-muted-foreground transition-transform group-open:rotate-180"/>
+                </summary>
+                <div className="space-y-2 border-t border-border px-3 py-3">
+                  {entries.map(r => {
+                    const product = data.products.find(p => p.id === r.product_id);
+                    return <div className="flex items-start justify-between gap-3 text-sm" key={r.id}>
+                      <span className="min-w-0 font-medium">{product?.name ?? 'Item da lista'}</span>
+                      <span className="shrink-0 text-muted-foreground">{number(Number(r.quantity))} {product?.unit ?? ''}</span>
+                    </div>;
+                  })}
+                </div>
+              </details>
+            ))}
         </div>
       ) : (
         <div className="empty-state rounded-xl border border-dashed border-border py-8">
