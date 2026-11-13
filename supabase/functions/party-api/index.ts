@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
     const admin = typeof body.password === "string" && body.password === organizerPassword;
-    const adminActions = ["edit", "delete", "received", "event", "verify", "participants", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete"];
+    const adminActions = ["edit", "delete", "received", "event", "verify", "participants", "audit_history", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete"];
     if (adminActions.includes(action) && !admin) return json({ error: "Senha incorreta ou acesso exclusivo do organizador." }, 401);
     let participant: { id: string; name: string } | null = null;
     if (!admin) {
@@ -171,6 +171,11 @@ Deno.serve(async (req) => {
       participant = data;
     }
     if (action === "verify") return json({ ok: true, participants: [] });
+    if (action === "audit_history") {
+      const { data, error } = await db.from("party_audit_log").select("id,action,entity_type,entity_name,actor_name,details,created_at").order("created_at", { ascending: false }).limit(200);
+      if (error) throw error;
+      return json({ ok: true, history: data ?? [] });
+    }
     if (action === "participants") {
       const { data, error } = await db.from("party_participants").select("id,name,created_at").order("name");
       if (error) throw error;
