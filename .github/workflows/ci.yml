@@ -26,3 +26,12 @@ jobs:
         run: bun run typecheck
       - name: Production build
         run: bun run build
+      - name: Build isolated demo bundle
+        run: VITE_DEMO_BUILD=1 bun run build
+      - name: Upload isolated demo preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: festou-demo-preview
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14

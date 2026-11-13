@@ -1,0 +1,48 @@
+name: Build isolated demo preview
+
+on:
+  push:
+    branches:
+      - feat/isolated-free-demo
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-demo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout demo branch
+        uses: actions/checkout@v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Build demo-only static bundle
+        run: VITE_DEMO_BUILD=1 bun run build
+      - name: Add preview instructions
+        run: |
+          cat > dist/LEIA-ME.txt <<'EOF'
+          FESTOU! - DEMONSTRAÇÃO ISOLADA
+
+          Este pacote contém a interface de demonstração com dados fictícios.
+          Não contém credenciais do Supabase e não se conecta ao banco oficial.
+
+          Para visualizar em um computador:
+          1. Instale Python 3, se ainda não estiver instalado.
+          2. Abra um terminal na pasta extraída.
+          3. Execute: python -m http.server 4173
+          4. Abra: http://localhost:4173
+
+          As alterações ficam no armazenamento local do navegador.
+          EOF
+      - name: Upload demo preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: festou-demo-preview
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
