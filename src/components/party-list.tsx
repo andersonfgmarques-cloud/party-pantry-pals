@@ -230,8 +230,21 @@ export function PartyList() {
 
   async function openNotifications() {
     if (!person) { setPendingModal('notifications'); setModal('identity'); return; }
-    try { setNotifications(await getPartyNotifications(person.token)); setModal('notifications'); }
-    catch { toast.error('Não foi possível carregar as notificações.'); }
+    try {
+      const current = await getPartyNotifications(person.token);
+      setNotifications(current);
+      setModal('notifications');
+      const unread = current.filter(item => !item.read_at);
+      const results = await Promise.allSettled(unread.map(item => markPartyNotificationRead(person.token, item.id)));
+      const readAt = new Date().toISOString();
+      const successfullyRead = new Set(unread.filter((_, index) => results[index]?.status === 'fulfilled').map(item => item.id));
+      if (successfullyRead.size) {
+        setNotifications(items => items.map(item => successfullyRead.has(item.id) ? { ...item, read_at: readAt } : item));
+      }
+      if (results.some(result => result.status === 'rejected')) {
+        toast.error('Algumas notificações não puderam ser marcadas como lidas. Tente novamente.');
+      }
+    } catch { toast.error('Não foi possível carregar as notificações.'); }
   }
   async function enablePushNotifications() {
     if (!person) { toast.info('Informe seu nome antes de ativar as notificações.'); setPendingModal('notifications'); setModal('identity'); return; }
