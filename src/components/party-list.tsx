@@ -68,6 +68,22 @@ export function PartyList() {
     const focus = () => qc.invalidateQueries({ queryKey: ['party'] }); window.addEventListener('focus', focus);
     return () => { supabase.removeChannel(channel); window.removeEventListener('focus', focus); window.removeEventListener('online', updateOnline); window.removeEventListener('offline', updateOnline); };
   }, [qc]);
+  useEffect(() => {
+    if (modal !== 'settings') return;
+    const event = data.event;
+    let dates: string[] = Array.isArray(event.party_dates) ? [...event.party_dates] : [];
+    if (!dates.length && event.party_date) {
+      dates = [event.party_date];
+      if (event.party_end_date && event.party_end_date > event.party_date) {
+        const cursor = new Date(`${event.party_date}T12:00:00`);
+        const end = new Date(`${event.party_end_date}T12:00:00`);
+        while (cursor < end && dates.length < 90) { cursor.setDate(cursor.getDate() + 1); dates.push(cursor.toISOString().slice(0, 10)); }
+      }
+    }
+    setPartyDates(dates.sort());
+    setGuests(event.guests == null ? '' : String(event.guests));
+    setLocationUrl(event.location_url ?? '');
+  }, [modal, data.event]);
   const total = data.products.length;
   const assumed = data.products.filter(p => reservedFor(p.id, data.reservations) > 0 || p.received).length;
   const completed = data.products.filter(p => ['complete','received'].includes(itemStatus(p, reservedFor(p.id, data.reservations)))).length;
