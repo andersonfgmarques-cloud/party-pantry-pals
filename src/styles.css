@@ -493,3 +493,39 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     scrollbar-width: thin;
   }
 }
+
+
+/* Dedicated scroll areas for the two participant dialogs */
+.participant-list-scroll,
+.participant-report-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--primary) 62%, transparent) transparent;
+  scrollbar-gutter: stable;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.participant-list-scroll::-webkit-scrollbar,
+.participant-report-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.participant-list-scroll::-webkit-scrollbar-track,
+.participant-report-scroll::-webkit-scrollbar-track {
+  background: color-mix(in oklch, var(--muted) 45%, transparent);
+  border-radius: 999px;
+}
+
+.participant-list-scroll::-webkit-scrollbar-thumb,
+.participant-report-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--primary) 58%, transparent);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.participant-list-scroll::-webkit-scrollbar-thumb:hover,
+.participant-report-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+  background-clip: padding-box;
+}
