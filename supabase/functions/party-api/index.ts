@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
       if (attempt?.locked_until && new Date(attempt.locked_until).getTime() > now) return json({ error: "Muitas tentativas. Aguarde 15 minutos e tente novamente." }, 429);
       const { data: candidates, error: lookupError } = await db.from("party_participants").select("id,name,pin_hash,pin_salt").not("pin_hash", "is", null);
       if (lookupError) throw lookupError;
-      const matchingNames = (candidates ?? []).filter(candidate => candidate.name.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR") === normalizedName);
+      const matchingNames = (candidates ?? []).filter(candidate => candidate.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR") === normalizedName);
       const matches = [];
       for (const candidate of matchingNames) {
         if (candidate.pin_hash && candidate.pin_salt && safeEqual(await hashPin(body.pin, candidate.pin_salt), candidate.pin_hash)) matches.push(candidate);
