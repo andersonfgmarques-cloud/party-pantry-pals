@@ -747,49 +747,23 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 
-/* Make the required contribution-status selector easy to notice and use. */
-.reservation-status-field {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-  min-width: 0;
-  flex: 1 1 150px;
-  color: var(--foreground);
-  font-size: 11px;
-  font-weight: 600;
-}
-.reservation-status-field > span strong {
-  color: var(--primary);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: .035em;
-}
-.reservation-status {
-  width: 100%;
-  min-height: 42px;
-  max-width: 220px;
-  padding: 8px 34px 8px 12px;
-  border: 1.5px solid var(--primary);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--primary) 8%, var(--background));
-  color: var(--foreground);
-  font-size: 14px;
-  font-weight: 600;
-}
-.reservation-status:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--primary) 24%, transparent);
-  outline-offset: 2px;
+/* Compact alert for mandatory contributions. */
+.required-item-alert {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 1px solid color-mix(in srgb, #d97706 32%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, #d97706 10%, var(--background));
+  color: #a16207;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
 }
 @media (max-width: 700px) {
-  .reservation-status-field {
-    flex: 1 1 100%;
-    width: 100%;
-  }
-  .reservation-status {
-    max-width: none;
-    width: 100%;
-    min-height: 46px;
-    font-size: 15px;
-  }
+  .required-item-alert { min-height: 40px; font-size: 12px; }
 }
