@@ -76,6 +76,12 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const action = body?.action;
 
+    if (action === "public_event") {
+      const { data, error } = await db.from("party_event").select("id,name,party_date,party_end_date,party_dates,guests").eq("id", 1).single();
+      if (error) throw error;
+      return json({ event: data });
+    }
+
     if (action === "event_location" && uuid(body.token)) {
       const participant = await participantByToken(db, body.token);
       if (participant) {
