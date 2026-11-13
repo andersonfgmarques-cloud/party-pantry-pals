@@ -767,3 +767,26 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (max-width: 700px) {
   .required-item-alert { min-height: 40px; font-size: 12px; }
 }
+
+
+/* Compact, accessible participant contribution accordions. */
+.participant-contribution-card > summary::-webkit-details-marker {
+  display: none;
+}
+.participant-expand-indicator {
+  display: inline-block;
+  font-size: 1.35rem;
+  line-height: 1;
+  transition: transform 160ms ease;
+}
+.participant-contribution-card[open] > summary {
+  border-bottom: 1px solid hsl(var(--border));
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.participant-contribution-card[open] .participant-expand-indicator {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .participant-expand-indicator { transition: none; }
+}

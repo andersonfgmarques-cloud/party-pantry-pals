@@ -543,30 +543,36 @@ export function PartyList() {
       <div className="section-heading">
         <div>
           <h2>Quem vai levar o quê?</h2>
-          <p>As contribuições aparecem aqui automaticamente conforme cada pessoa escolhe um item.</p>
+          <p>Toque no nome para ver os itens de cada participante.</p>
         </div>
         <span className="live-label"><span className="live-dot"/>{people} {people === 1 ? 'pessoa contribuindo' : 'pessoas contribuindo'}</span>
       </div>
       {data.reservations.length ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from(new Set(data.reservations.map(r => r.participant_name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR')))).map(participantKey => {
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {Array.from(new Map(data.reservations.map(r => [
+            r.participant_name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR'),
+            r.participant_name.trim()
+          ])).entries()).sort((a,b) => a[1].localeCompare(b[1], 'pt-BR')).map(([participantKey, participantName]) => {
             const entries = data.reservations.filter(r => r.participant_name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR') === participantKey);
-            const participantName = entries[0]?.participant_name.trim() ?? 'Participante';
-            return <article className="rounded-xl border border-border bg-card p-4 shadow-sm" key={participantKey}>
-              <div className="mb-3 flex items-center gap-2">
-                <span className="initial">{participantName.slice(0,1).toUpperCase()}</span>
-                <strong>{participantName}</strong>
-              </div>
-              <div className="space-y-2">
+            return <details className="participant-contribution-card rounded-xl border border-border bg-card shadow-sm" key={participantKey}>
+              <summary className="flex min-h-16 cursor-pointer list-none items-center gap-3 rounded-xl px-4 py-3 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <span className="initial shrink-0">{participantName.slice(0,1).toUpperCase()}</span>
+                <span className="min-w-0 flex-1">
+                  <strong className="block truncate">{participantName}</strong>
+                  <span className="text-xs text-muted-foreground">{entries.length} {entries.length === 1 ? 'item reservado' : 'itens reservados'}</span>
+                </span>
+                <span className="participant-expand-indicator text-muted-foreground" aria-hidden="true">⌄</span>
+              </summary>
+              <div className="space-y-0 px-4 pb-3">
                 {entries.map(r => {
                   const product = data.products.find(p => p.id === r.product_id);
-                  return <div className="flex items-start justify-between gap-3 border-t border-border pt-2 text-sm" key={r.id}>
-                    <span className="font-medium">{product?.name ?? 'Item da lista'}</span>
+                  return <div className="flex items-start justify-between gap-3 border-t border-border py-2 text-sm" key={r.id}>
+                    <span className="min-w-0 font-medium">{product?.name ?? 'Item da lista'}</span>
                     <span className="shrink-0 text-muted-foreground">{number(Number(r.quantity))} {product?.unit ?? ''}</span>
                   </div>;
                 })}
               </div>
-            </article>;
+            </details>;
           })}
         </div>
       ) : (
