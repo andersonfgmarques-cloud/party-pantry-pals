@@ -716,3 +716,32 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
     max-width: calc(100vw - 32px);
   }
 }
+
+
+/* Phones: use a single product column so labels and admin actions never get squeezed. */
+@media (max-width: 700px) {
+  .product-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100%;
+  }
+  .product-card {
+    width: 100%;
+    min-width: 0;
+  }
+  .product-card .admin-controls {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+    gap: 8px;
+  }
+  .product-card .admin-controls .manage-product-button {
+    flex: 0 0 auto !important;
+    width: max-content !important;
+    min-width: max-content !important;
+    white-space: nowrap !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+  }
+}
