@@ -129,11 +129,6 @@ Deno.serve(async (req) => {
       if (error || !data) return json({ error: "Não foi possível salvar seu nome." }, 400);
       return json(data);
     }
-    if (action === "public_participants") {
-      const { data, error } = await db.from("party_participants").select("id,name,created_at").order("name");
-      if (error) throw error;
-      return json({ ok: true, participants: data ?? [] });
-    }
     if (action === "push_config") return json({ publicKey: VAPID_PUBLIC_KEY });
     if (action === "push_subscribe" || action === "push_unsubscribe" || action === "notifications" || action === "notification_read") {
       if (!uuid(body.token)) return json({ error: "Identificação do participante inválida." }, 401);
