@@ -71,7 +71,7 @@ export function PartyList() {
   const assumed = data.products.filter(p => reservedFor(p.id, data.reservations) > 0 || p.received).length;
   const completed = data.products.filter(p => ['complete','received'].includes(itemStatus(p, reservedFor(p.id, data.reservations)))).length;
   const progress = total ? Math.round(completed / total * 100) : 0;
-  const people = new Set(data.reservations.map(r => r.participant_name.trim().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLocaleLowerCase('pt-BR'))).size;
+  const people = new Set(data.reservations.map(r => r.participant_name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR'))).size;
   const configuredDates = data.event.party_dates?.length ? [...data.event.party_dates].sort() : data.event.party_date ? [data.event.party_date] : [];
   const startDate = configuredDates[0] ? new Date(`${configuredDates[0]}T12:00:00`) : null;
   const endDate = configuredDates.at(-1) ? new Date(`${configuredDates.at(-1)}T12:00:00`) : startDate;
@@ -90,7 +90,23 @@ export function PartyList() {
   })();
   const daysUntilParty = configuredDates[0] ? Math.ceil((new Date(`${configuredDates[0]}T00:00:00`).getTime() - new Date(new Date().toDateString()).getTime()) / 86400000) : null;
   const countdownLabel = daysUntilParty === null ? 'Data a definir' : daysUntilParty < 0 ? 'Evento já realizado' : daysUntilParty === 0 ? 'É hoje!' : `Faltam ${daysUntilParty} dias`;
-  const visible = data.products.filter(p => (!category || p.category_id === category) && p.name.toLocaleLowerCase('pt-BR').includes(search.toLocaleLowerCase('pt-BR')) && (view !== 'mine' || data.reservations.some(r => r.product_id === p.id && r.participant_id === person?.id)) && (status === 'all' || status === itemStatus(p, reservedFor(p.id, data.reservations))));
+  const normalizeSearch = (value: string) => value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  const searchTerms = normalizeSearch(search).split(/\s+/).filter(Boolean);
+  const visible = data.products.filter(p => {
+    const productCategory = data.categories.find(c => c.id === p.category_id)?.name ?? '';
+    const searchableText = normalizeSearch([p.name, p.note ?? '', p.unit, productCategory].join(' '));
+    const matchesSearch = searchTerms.every(term => searchableText.includes(term));
+    const reserved = reservedFor(p.id, data.reservations);
+    return (!category || p.category_id === category)
+      && matchesSearch
+      && (view !== 'mine' || data.reservations.some(r => r.product_id === p.id && r.participant_id === person?.id))
+      && (status === 'all' || status === itemStatus(p, reserved));
+  });
   function open(next: Modal, product?: Product) { setSelected(product ?? null); if (['add','reserve'].includes(next ?? '') && !person && !password) { setPendingModal(next); setModal('identity'); } else setModal(next); }
   async function act(input: Parameters<typeof mutate>[0]['data'], message: string) {
     if (!online) { toast.error('Conecte-se à internet para atualizar a lista.'); return false; }
@@ -363,8 +379,8 @@ export function PartyList() {
       </div>
       {data.reservations.length ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from(new Set(data.reservations.map(r => r.participant_name.trim().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLocaleLowerCase('pt-BR')))).map(participantKey => {
-            const entries = data.reservations.filter(r => r.participant_name.trim().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLocaleLowerCase('pt-BR') === participantKey);
+          {Array.from(new Set(data.reservations.map(r => r.participant_name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR')))).map(participantKey => {
+            const entries = data.reservations.filter(r => r.participant_name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR') === participantKey);
             const participantName = entries[0]?.participant_name.trim() ?? 'Participante';
             return <article className="rounded-xl border border-border bg-card p-4 shadow-sm" key={participantKey}>
               <div className="mb-3 flex items-center gap-2">
