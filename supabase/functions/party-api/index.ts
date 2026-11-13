@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
       const { data: attempt } = await db.from("party_pin_login_attempts").select("*").eq("name_hash", nameHash).maybeSingle();
       const now = Date.now();
       if (attempt?.locked_until && new Date(attempt.locked_until).getTime() > now) return json({ error: "Muitas tentativas. Aguarde 15 minutos e tente novamente." }, 429);
-      const { data: candidates, error: lookupError } = await db.from("party_participants").select("id,name,pin_hash,pin_salt").not("pin_hash", "is", null);
+      const { data: candidates, error: lookupError } = await db.from("party_participants").select("id,name,pin_hash,pin_salt,is_collaborator").not("pin_hash", "is", null);
       if (lookupError) throw lookupError;
       const matchingNames = (candidates ?? []).filter(candidate => candidate.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR") === normalizedName);
       const matches = [];
@@ -138,7 +138,7 @@ Deno.serve(async (req) => {
       const token = crypto.randomUUID();
       const { error: tokenError } = await db.from("party_participant_sessions").insert({ participant_id: matches[0].id, token_hash: await sha256(token) });
       if (tokenError) throw tokenError;
-      return json({ id: matches[0].id, name: matches[0].name, token });
+      return json({ id: matches[0].id, name: matches[0].name, token, isCollaborator: matches[0].is_collaborator === true });
     }
     if (action === "participant_rename") {
       const name = typeof body.name === "string" ? body.name.trim().replace(/\\s+/g, " ") : "";
@@ -211,7 +211,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, participants: data ?? [] });
     }
     const admin = typeof body.password === "string" && body.password === organizerPassword;
-    const adminActions = ["edit", "delete", "received", "event", "event_location", "verify", "participants", "audit_history", "expenses", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete"];
+    const adminActions = ["event", "event_location", "verify", "participants", "audit_history", "expenses", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete", "collaborator_set", "admin_notifications", "notification_delete"];
     if (adminActions.includes(action)) {
       const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
       const clientIp = req.headers.get("cf-connecting-ip")?.trim()
@@ -253,6 +253,20 @@ Deno.serve(async (req) => {
       if (!data) return json({ error: "Informe seu nome para participar." }, 401);
       participant = data;
     }
+    let collaborator = false;
+    if (participant) {
+      const { data: role, error: roleError } = await db.from("party_participants").select("is_collaborator").eq("id", participant.id).maybeSingle();
+      if (roleError) throw roleError;
+      collaborator = role?.is_collaborator === true;
+    }
+    if (action === "participant_role") return json({ isCollaborator: collaborator });
+    if (action === "collaborator_set") {
+      if (!admin || !uuid(body.id) || typeof body.isCollaborator !== "boolean") return json({ error: "Ação exclusiva do organizador." }, 403);
+      const { data: target, error: updateError } = await db.from("party_participants").update({ is_collaborator: body.isCollaborator }).eq("id", body.id).select("id,name,is_collaborator").maybeSingle();
+      if (updateError) throw updateError;
+      if (!target) return json({ error: "Participante não encontrado." }, 404);
+      return json({ ok: true, participant: target });
+    }
     if (action === "birthday_photos") {
       if (!admin && !participant) return json({ error: "Identifique-se como participante para visualizar as fotos." }, 401);
       const { data: people, error: peopleError } = await db.from("party_birthday_people").select("id,name,photo_path").order("name");
@@ -268,13 +282,30 @@ Deno.serve(async (req) => {
       }) });
     }
     if (action === "verify") return json({ ok: true, participants: [] });
+    if (action === "admin_notifications") {
+      if (!admin) return json({ error: "Ação exclusiva do organizador." }, 403);
+      const { data, error } = await db.from("party_notifications").select("id,title,body,kind,created_at,read_at").order("created_at", { ascending: false }).limit(200);
+      if (error) throw error;
+      return json({ notifications: data ?? [] });
+    }
+    if (action === "notification_delete") {
+      if (!admin) return json({ error: "Ação exclusiva do organizador." }, 403);
+      let query = db.from("party_notifications").delete();
+      if (body.id !== undefined) {
+        if (!uuid(body.id)) return json({ error: "Notificação inválida." }, 400);
+        query = query.eq("id", body.id);
+      }
+      const { error } = await query;
+      if (error) throw error;
+      return json({ ok: true });
+    }
     if (action === "audit_history") {
       const { data, error } = await db.from("party_audit_log").select("id,action,entity_type,entity_name,actor_name,details,created_at").order("created_at", { ascending: false }).limit(200);
       if (error) throw error;
       return json({ ok: true, history: data ?? [] });
     }
     if (action === "participants") {
-      const { data, error } = await db.from("party_participants").select("id,name,created_at").order("name");
+      const { data, error } = await db.from("party_participants").select("id,name,created_at,is_collaborator").order("name");
       if (error) throw error;
       return json({ ok: true, participants: data ?? [] });
     }
@@ -291,6 +322,9 @@ Deno.serve(async (req) => {
       const { error } = await db.from("party_participants").delete().eq("id", target.id);
       if (error) throw error;
       return json({ ok: true, deletedParticipant: target.id });
+    }
+    if (["add", "edit", "delete", "received"].includes(action) && !admin && !collaborator) {
+      return json({ error: "Ação disponível somente ao organizador ou a um colaborador autorizado." }, 403);
     }
     let result;
     if (action === "add") {
