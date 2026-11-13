@@ -168,6 +168,11 @@ Deno.serve(async (req) => {
       if (error) throw error;
       return json({ ok: true });
     }
+    if (action === "participant_directory") {
+      const { data, error } = await db.from("party_participants").select("id,name,created_at").order("name");
+      if (error) throw error;
+      return json({ ok: true, participants: data ?? [] });
+    }
     const admin = typeof body.password === "string" && body.password === organizerPassword;
     const adminActions = ["edit", "delete", "received", "event", "verify", "participants", "audit_history", "expenses", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete"];
     if (adminActions.includes(action)) {
