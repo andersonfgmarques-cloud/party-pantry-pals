@@ -63,7 +63,7 @@ export function PartyList() {
     void refreshDirectory();
     const refresh = () => qc.invalidateQueries({ queryKey: ['party'] });
     const channel = supabase.channel(`party-${crypto.randomUUID()}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'party_products' }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'party_products' }, () => { refresh(); if (person?.token) window.setTimeout(() => getPartyNotifications(person.token).then(setNotifications).catch(() => {}), 700); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'party_participants' }, () => { void refreshDirectory(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'party_reservations' }, payload => {
         refresh();
