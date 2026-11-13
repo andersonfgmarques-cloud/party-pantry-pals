@@ -35,7 +35,7 @@ export function PartyList() {
   const [status, setStatus] = useState('all');
   const [online, setOnline] = useState(true);
   const [history, setHistory] = useState<{ id: string; action: string; entity_name: string | null; actor_name: string; created_at: string; details: Record<string, unknown> }[]>([]);
-  const [participants, setParticipants] = useState<{ id: string; name: string; created_at: string | null; is_collaborator: boolean }[]>([]);
+  const [participants, setParticipants] = useState<{ id: string; name: string; created_at: string | null; is_collaborator?: boolean }[]>([]);
   const [statsKind, setStatsKind] = useState<StatsKind>('items');
   const [dashboardFilter, setDashboardFilter] = useState<'all' | 'unassigned' | 'partial' | 'guaranteed' | 'received' | 'undefined'>('all');
   const [notifications, setNotifications] = useState<PartyNotification[]>([]);

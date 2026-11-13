@@ -32,7 +32,7 @@ const mutation = z.object({
   photoData: z.string().max(4200000).optional(),
 });
 type Mutation = z.infer<typeof mutation>;
-type Participant = { id: string; name: string; created_at: string | null; is_collaborator: boolean };
+type Participant = { id: string; name: string; created_at: string | null; is_collaborator?: boolean };
 
 async function invokePartyApi<T>(body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke('party-api', { body });

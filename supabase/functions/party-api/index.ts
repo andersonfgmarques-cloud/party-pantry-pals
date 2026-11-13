@@ -206,7 +206,7 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
     if (action === "participant_directory") {
-      const { data, error } = await db.from("party_participants").select("id,name,created_at,is_collaborator").order("name");
+      const { data, error } = await db.from("party_participants").select("id,name,created_at").order("name");
       if (error) throw error;
       return json({ ok: true, participants: data ?? [] });
     }
