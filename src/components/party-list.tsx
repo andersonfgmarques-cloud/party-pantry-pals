@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { partyQuery } from '@/lib/party.queries';
-import { identifyParticipant, changeParty, loginParticipant, logoutParticipant, setParticipantPin, getPartyNotifications, markPartyNotificationRead, savePushSubscription, getPushPublicKey, getPartyExpenses, getPartyBirthdayPhotos, type PartyNotification } from '@/lib/party.functions';
+import { identifyParticipant, changeParty, loginParticipant, logoutParticipant, setParticipantPin, getPartyNotifications, markPartyNotificationRead, savePushSubscription, getPushPublicKey, getPartyExpenses, getPartyBirthdayPhotos, renameParticipant, type PartyNotification } from '@/lib/party.functions';
 import { reservedFor, itemStatus, remainingFor, number, statusLabels, type Product, type Expense } from '@/lib/party';
 import garden from '@/assets/chacara-garden.jpg';
 
@@ -186,6 +186,24 @@ export function PartyList() {
       await markPartyNotificationRead(person.token, notification.id);
       setNotifications(current => current.map(item => item.id === notification.id ? { ...item, read_at: new Date().toISOString() } : item));
     } catch { toast.error('Não foi possível atualizar a notificação.'); }
+  }
+  async function submitParticipantName(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!person) return;
+    const name = String(new FormData(e.currentTarget).get('name') ?? '').trim().replace(/\\s+/g, ' ');
+    if (name.length < 2 || name.length > 60) { toast.error('Informe um nome entre 2 e 60 caracteres.'); return; }
+    if (name === person.name) { toast.info('O nome informado já está atualizado.'); return; }
+    setBusy(true);
+    try {
+      const updated = await renameParticipant(person.token, name);
+      const nextPerson = { ...person, name: updated.name };
+      setPerson(nextPerson);
+      try { localStorage.setItem('party-identity', JSON.stringify(nextPerson)); } catch { /* storage may be unavailable */ }
+      await qc.invalidateQueries({ queryKey: ['party'] });
+      toast.success('Nome atualizado com sucesso!');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível atualizar seu nome.');
+    } finally { setBusy(false); }
   }
   async function submitIdentity(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const form = new FormData(e.currentTarget); setBusy(true);
@@ -518,6 +536,10 @@ export function PartyList() {
         <strong className="text-lg">{person.name}</strong>
         <p className="mt-1 text-sm text-muted-foreground">{data.reservations.filter(r => r.participant_id === person.id).length} contribuições registradas</p>
       </div>
+      <form className="modal-form" onSubmit={submitParticipantName}>
+        <label>Alterar meu nome<input name="name" required minLength={2} maxLength={60} defaultValue={person.name} autoComplete="name" /></label>
+        <Button type="submit" variant="outline" disabled={busy}>{busy ? 'Salvando...' : 'Salvar novo nome'}</Button>
+      </form>
       <div className="max-h-56 space-y-2 overflow-y-auto">
         {data.reservations.filter(r => r.participant_id === person.id).map(r => {
           const product = data.products.find(p => p.id === r.product_id);
