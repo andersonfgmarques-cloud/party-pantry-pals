@@ -90,28 +90,51 @@ export function PartyList() {
     return () => { active = false; };
   }, [modal, password]);
   useEffect(() => {
-    if (!person?.token && !password)
-  useEffect(() => {
-    if (!person?.token) { setNotifications([]); setPushEnabled(false); return; }
+    if (!person?.token) {
+      setNotifications([]);
+      setPushEnabled(false);
+      return;
+    }
+
     let active = true;
-    getPartyNotifications(person.token).then(rows => { if (active) setNotifications(rows); }).catch(() => {});
+    getPartyNotifications(person.token)
+      .then(rows => { if (active) setNotifications(rows); })
+      .catch(() => {});
+
     const syncPushStatus = async () => {
       try {
-        if (!('serviceWorker' in navigator) || !('PushManager' in window)) { if (active) setPushEnabled(false); return; }
-        const registration = await navigator.serviceWorker.getRegistration(`${import.meta.env.BASE_URL}`);
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+          if (active) setPushEnabled(false);
+          return;
+        }
+        const registration = await navigator.serviceWorker.getRegistration(import.meta.env.BASE_URL);
         const subscription = await registration?.pushManager.getSubscription();
         const status = await getPushStatus(person.token, subscription?.endpoint);
         if (active) setPushEnabled(status.enabled);
-      } catch { if (active) setPushEnabled(false); }
+      } catch {
+        if (active) setPushEnabled(false);
+      }
     };
+
     void syncPushStatus();
     return () => { active = false; };
   }, [person?.token]);
- { setBirthdayPhotos({}); return; }
+
+  useEffect(() => {
+    if (!person?.token && !password) {
+      setBirthdayPhotos({});
+      return;
+    }
+
     let active = true;
     getPartyBirthdayPhotos(person?.token, password || undefined)
       .then(photos => { if (active) setBirthdayPhotos(photos); })
-      .catch(error => { if (active) { setBirthdayPhotos({}); toast.error(error instanceof Error ? error.message : 'Não foi possível carregar as fotos.'); } });
+      .catch(error => {
+        if (active) {
+          setBirthdayPhotos({});
+          toast.error(error instanceof Error ? error.message : 'Não foi possível carregar as fotos.');
+        }
+      });
     return () => { active = false; };
   }, [person?.token, password, data.birthdays]);
   useEffect(() => {
