@@ -571,6 +571,13 @@ export function PartyList() {
                       <span className="shrink-0 text-muted-foreground">{number(Number(r.quantity))} {product?.unit ?? ''}</span>
                     </div>;
                   })}
+                  {person && entries.some(r => r.participant_id === person.id) && (
+                    <div className="flex justify-end border-t border-border pt-3">
+                      <Button type="button" size="sm" variant="outline" onClick={() => exportParticipantPdf({ id: person.id, name: person.name })}>
+                        <Download size={15}/> Gerar meu PDF
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </details>
             ))}
