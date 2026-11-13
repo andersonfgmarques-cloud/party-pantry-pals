@@ -364,7 +364,7 @@ export function PartyList() {
     if (!ids.length) { toast.info('Escolha pelo menos um produto.'); return; }
     const participantId = password ? String(form.get('participant') ?? '') : undefined;
     if (password && !participantId) { toast.error('Selecione quem ficará responsável.'); return; }
-    const items = ids.map(id => { const product = data.products.find(p => p.id === id); return { product, quantity: Number(form.get('quantity-' + id)), source: form.get('source-' + id) === 'home' ? 'home' : 'buy' as const }; });
+    const items = ids.map(id => { const product = data.products.find(p => p.id === id); return { product, quantity: Number(form.get('quantity-' + id)), source: (form.get('source-' + id) === 'home' ? 'home' : 'buy') as 'home' | 'buy' }; });
     if (items.some(x => !x.product || !Number.isFinite(x.quantity) || x.quantity <= 0)) { toast.error('Confira as quantidades.'); return; }
     const over = items.find(x => x.product && remainingFor(x.product, reservedFor(x.product.id, data.reservations)) !== null && x.quantity > (remainingFor(x.product, reservedFor(x.product.id, data.reservations)) ?? 0));
     if (over) { toast.error('A quantidade de ' + over.product!.name + ' excede o que falta.'); return; }
