@@ -9,7 +9,7 @@ const mutation = z.object({
   password: z.string().max(200).optional(),
   pin: z.string().optional(),
   isCollaborator: z.boolean().optional(),
-  action: z.enum(['participant_directory','participant_role','collaborator_set','participant_rename','pin_set','pin_login','participant_logout','add','reserve','cancel','edit','delete','received','event','verify','participants','reservation_status','adjust_reservation','push_config','push_subscribe','push_unsubscribe','push_status','notifications','notification_read','audit_history','expenses','expense_add','expense_delete','birthday_add','birthday_edit','birthday_delete','birthday_photos','participant_delete']),
+  action: z.enum(['participant_directory','participant_role','collaborator_set','participant_rename','pin_set','pin_login','participant_logout','add','reserve','cancel','edit','delete','received','event','verify','participants','reservation_status','adjust_reservation','push_config','push_subscribe','push_unsubscribe','push_status','notifications','notification_read','audit_history','expenses','expense_add','expense_delete','birthday_add','birthday_edit','birthday_delete','birthday_photos','participant_delete','admin_notifications','notification_delete']),
   id: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(100).optional(),
   categoryId: z.number().int().min(1).max(6).optional(),
@@ -91,6 +91,13 @@ export async function getPartyNotifications(token: string): Promise<PartyNotific
 }
 export async function markPartyNotificationRead(token: string, id: string): Promise<void> {
   await invokePartyApi({ action: 'notification_read', token, id });
+}
+export async function getAdminPartyNotifications(password: string): Promise<PartyNotification[]> {
+  const result = await invokePartyApi<{ notifications: PartyNotification[] }>({ action: 'admin_notifications', password });
+  return result.notifications ?? [];
+}
+export async function deletePartyNotification(password: string, id?: string): Promise<void> {
+  await invokePartyApi({ action: 'notification_delete', password, ...(id ? { id } : {}) });
 }
 export async function savePushSubscription(token: string, subscription: PushSubscription): Promise<void> {
   await invokePartyApi({ action: 'push_subscribe', token, subscription: subscription.toJSON() });

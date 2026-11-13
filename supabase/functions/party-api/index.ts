@@ -211,7 +211,7 @@ Deno.serve(async (req) => {
       return json({ ok: true, participants: data ?? [] });
     }
     const admin = typeof body.password === "string" && body.password === organizerPassword;
-    const adminActions = ["event", "event_location", "verify", "participants", "audit_history", "expenses", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete", "collaborator_set"];
+    const adminActions = ["event", "event_location", "verify", "participants", "audit_history", "expenses", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete", "collaborator_set", "admin_notifications", "notification_delete"];
     if (adminActions.includes(action)) {
       const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
       const clientIp = req.headers.get("cf-connecting-ip")?.trim()
@@ -282,6 +282,23 @@ Deno.serve(async (req) => {
       }) });
     }
     if (action === "verify") return json({ ok: true, participants: [] });
+    if (action === "admin_notifications") {
+      if (!admin) return json({ error: "Ação exclusiva do organizador." }, 403);
+      const { data, error } = await db.from("party_notifications").select("id,title,body,kind,created_at,read_at").order("created_at", { ascending: false }).limit(200);
+      if (error) throw error;
+      return json({ notifications: data ?? [] });
+    }
+    if (action === "notification_delete") {
+      if (!admin) return json({ error: "Ação exclusiva do organizador." }, 403);
+      let query = db.from("party_notifications").delete();
+      if (body.id !== undefined) {
+        if (!uuid(body.id)) return json({ error: "Notificação inválida." }, 400);
+        query = query.eq("id", body.id);
+      }
+      const { error } = await query;
+      if (error) throw error;
+      return json({ ok: true });
+    }
     if (action === "audit_history") {
       const { data, error } = await db.from("party_audit_log").select("id,action,entity_type,entity_name,actor_name,details,created_at").order("created_at", { ascending: false }).limit(200);
       if (error) throw error;

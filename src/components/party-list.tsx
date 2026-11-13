@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { partyQuery } from '@/lib/party.queries';
-import { identifyParticipant, changeParty, loginParticipant, logoutParticipant, setParticipantPin, getPartyNotifications, markPartyNotificationRead, savePushSubscription, getPushPublicKey, getPartyExpenses, getPartyBirthdayPhotos, renameParticipant, getPushStatus, getPartyLocation, type PartyNotification } from '@/lib/party.functions';
+import { identifyParticipant, changeParty, loginParticipant, logoutParticipant, setParticipantPin, getPartyNotifications, getAdminPartyNotifications, deletePartyNotification, markPartyNotificationRead, savePushSubscription, getPushPublicKey, getPartyExpenses, getPartyBirthdayPhotos, renameParticipant, getPushStatus, getPartyLocation, type PartyNotification } from '@/lib/party.functions';
 import { reservedFor, itemStatus, remainingFor, number, statusLabels, type Product, type Expense } from '@/lib/party';
 import garden from '@/assets/chacara-garden.jpg';
 
@@ -229,13 +229,14 @@ export function PartyList() {
   }
 
   async function openNotifications() {
-    if (!person) { setPendingModal('notifications'); setModal('identity'); return; }
+    if (!person && !password) { setPendingModal('notifications'); setModal('identity'); return; }
     try {
-      const current = await getPartyNotifications(person.token);
+      const current = password ? await getAdminPartyNotifications(password) : await getPartyNotifications(person!.token);
       setNotifications(current);
       setModal('notifications');
+      if (password) return;
       const unread = current.filter(item => !item.read_at);
-      const results = await Promise.allSettled(unread.map(item => markPartyNotificationRead(person.token, item.id)));
+      const results = await Promise.allSettled(unread.map(item => markPartyNotificationRead(person!.token, item.id)));
       const readAt = new Date().toISOString();
       const successfullyRead = new Set(unread.filter((_, index) => results[index]?.status === 'fulfilled').map(item => item.id));
       if (successfullyRead.size) {
@@ -266,6 +267,28 @@ export function PartyList() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Não foi possível ativar as notificações.');
     }
+  }
+  async function deleteNotification(notification: PartyNotification) {
+    if (!password) return;
+    if (!window.confirm("Excluir esta notificação permanentemente?")) return;
+    setBusy(true);
+    try {
+      await deletePartyNotification(password, notification.id);
+      setNotifications(current => current.filter(item => item.id !== notification.id));
+      toast.success("Notificação excluída.");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível excluir a notificação."); }
+    finally { setBusy(false); }
+  }
+  async function clearNotifications() {
+    if (!password || !notifications.length) return;
+    if (!window.confirm("Excluir todas as notificações do sistema? Esta ação não pode ser desfeita.")) return;
+    setBusy(true);
+    try {
+      await deletePartyNotification(password);
+      setNotifications([]);
+      toast.success("Todas as notificações foram excluídas.");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível excluir as notificações."); }
+    finally { setBusy(false); }
   }
   async function readNotification(notification: PartyNotification) {
     if (!person || notification.read_at) return;
@@ -655,7 +678,7 @@ export function PartyList() {
       </div>
     </div>}
     {modal === 'birthday' && <form className="modal-form" onSubmit={submitBirthday}><label>Nome<input name="name" required minLength={1} maxLength={60} defaultValue={selectedBirthday?.name ?? ''} placeholder="Ex.: Maria"/></label><label>Foto<input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required={!selectedBirthday}/></label><p className="help-text">Foto JPG, PNG ou WebP. Tamanho máximo: 3 MB. {selectedBirthday ? 'Se não selecionar outra foto, a atual será mantida.' : ''}</p><Button type="submit" disabled={busy}>{busy ? 'Salvando...' : selectedBirthday ? 'Salvar alterações' : 'Adicionar ao álbum'}</Button></form>}
-    {modal === 'notifications' && <div className="modal-form notification-panel"><Button type="button" onClick={enablePushNotifications} disabled={pushEnabled}>{pushEnabled ? <><BellRing size={16}/> Notificações ativadas neste dispositivo</> : <><Bell size={16}/> Ativar notificações neste dispositivo</>}</Button><p className="help-text">As notificações push dependem da permissão do navegador e da inscrição deste dispositivo. Para receber avisos em outro celular ou computador, ative também nele.</p>{notifications.length === 0 ? <p className="help-text">Nenhuma novidade por enquanto. Quando alguém reservar, alterar ou liberar uma contribuição, ou atualizar a situação de um item, as novidades aparecerão aqui.</p> : <div className="notification-list">{notifications.map(item => <button type="button" key={item.id} className={`notification-item ${item.read_at ? 'read' : 'unread'}`} onClick={() => readNotification(item)}><span className="notification-title">{item.title}</span><span>{item.body}</span><small>{new Date(item.created_at).toLocaleString('pt-BR')}</small></button>)}</div>}</div>}
+    {modal === 'notifications' && <div className="modal-form notification-panel"><Button type="button" onClick={enablePushNotifications} disabled={pushEnabled}>{pushEnabled ? <><BellRing size={16}/> Notificações ativadas neste dispositivo</> : <><Bell size={16}/> Ativar notificações neste dispositivo</>}</Button><p className="help-text">As notificações push dependem da permissão do navegador e da inscrição deste dispositivo. Para receber avisos em outro celular ou computador, ative também nele.</p>{password && notifications.length > 0 && <Button type="button" variant="destructive" size="sm" disabled={busy} onClick={clearNotifications}><Trash2 size={15}/> Excluir todas as notificações</Button>}{notifications.length === 0 ? <p className="help-text">Nenhuma novidade por enquanto. Quando alguém reservar, alterar ou liberar uma contribuição, ou atualizar a situação de um item, as novidades aparecerão aqui.</p> : <div className="notification-list">{notifications.map(item => <div key={item.id} className={`notification-item ${item.read_at ? 'read' : 'unread'}`}><button type="button" className="w-full text-left" onClick={() => readNotification(item)}><span className="notification-title">{item.title}</span><span>{item.body}</span><small>{new Date(item.created_at).toLocaleString('pt-BR')}</small></button>{password && <Button type="button" size="icon" variant="ghost" aria-label="Excluir notificação" title="Excluir notificação" disabled={busy} onClick={() => deleteNotification(item)}><Trash2 size={15}/></Button>}</div>)}</div>}</div>}
     {modal === 'identity' && identityMode === 'register' && <form className="modal-form" onSubmit={submitIdentity}><label>Seu nome<input name="name" required minLength={2} maxLength={60} defaultValue={person?.name} placeholder="Nome e sobrenome" autoComplete="name"/></label><Button type="submit" disabled={busy}>{busy ? 'Salvando...' : 'Vamos participar'}</Button><Button type="button" variant="ghost" onClick={() => setIdentityMode('login')}>Já tenho cadastro · Entrar com PIN</Button></form>}
     {modal === 'identity' && identityMode === 'login' && <form className="modal-form" onSubmit={submitPinLogin}><label>Seu nome<input name="name" required minLength={2} maxLength={60} defaultValue={person?.name ?? ''} placeholder="Nome e sobrenome" autoComplete="name"/></label><label>PIN de 6 números<input name="pin" type="password" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} required autoComplete="one-time-code" placeholder="••••••"/></label><Button type="submit" disabled={busy}>{busy ? 'Entrando...' : 'Entrar e ver minhas contribuições'}</Button><Button type="button" variant="ghost" onClick={() => setIdentityMode('register')}>Primeira vez? Criar cadastro</Button></form>}
     {modal === 'identity' && identityMode === 'setPin' && <form className="modal-form" onSubmit={submitPinSet}><p className="help-text">Seu nome: <strong>{person?.name}</strong>. Guarde o PIN para entrar em outro celular ou navegador.</p><label>Criar PIN de 6 números<input name="pin" type="password" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} required autoComplete="new-password" placeholder="••••••"/></label><label>Confirmar PIN<input name="confirmation" type="password" inputMode="numeric" pattern="[0-9]{6}" minLength={6} maxLength={6} required autoComplete="new-password" placeholder="Repita o PIN"/></label><Button type="submit" disabled={busy}>{busy ? 'Salvando...' : 'Salvar meu PIN'}</Button></form>}
