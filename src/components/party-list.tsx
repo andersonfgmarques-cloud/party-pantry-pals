@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { partyQuery } from '@/lib/party.queries';
-import { identifyParticipant, changeParty, loginParticipant, logoutParticipant, setParticipantPin, getPartyNotifications, markPartyNotificationRead, savePushSubscription, getPushPublicKey, getPartyExpenses, getPartyBirthdayPhotos, renameParticipant, getPushStatus, type PartyNotification } from '@/lib/party.functions';
+import { identifyParticipant, changeParty, loginParticipant, logoutParticipant, setParticipantPin, getPartyNotifications, markPartyNotificationRead, savePushSubscription, getPushPublicKey, getPartyExpenses, getPartyBirthdayPhotos, renameParticipant, getPushStatus, getPartyLocation, type PartyNotification } from '@/lib/party.functions';
 import { reservedFor, itemStatus, remainingFor, number, statusLabels, type Product, type Expense } from '@/lib/party';
 import garden from '@/assets/chacara-garden.jpg';
 
@@ -41,9 +41,19 @@ export function PartyList() {
   const [birthdayPhotos, setBirthdayPhotos] = useState<Record<string, string>>({});
   const [pushEnabled, setPushEnabled] = useState(false);
   const unreadNotifications = notifications.filter(item => !item.read_at).length;
+  useEffect(() => {
+    let active = true;
+    setAuthorizedLocationUrl(null);
+    if (!person?.token && !password) return () => { active = false; };
+    getPartyLocation(person?.token, password || undefined)
+      .then(url => { if (active) setAuthorizedLocationUrl(url); })
+      .catch(() => { if (active) setAuthorizedLocationUrl(null); });
+    return () => { active = false; };
+  }, [person?.token, password]);
   const [partyDates, setPartyDates] = useState<string[]>([]);
   const [guests, setGuests] = useState('');
   const [locationUrl, setLocationUrl] = useState('');
+  const [authorizedLocationUrl, setAuthorizedLocationUrl] = useState<string | null>(null);
   const [newPartyDate, setNewPartyDate] = useState('');
   const [selectedBirthday, setSelectedBirthday] = useState<{ id: string; name: string; photo_path: string } | null>(null);
   const [rouletteCategory, setRouletteCategory] = useState(0);
@@ -152,7 +162,7 @@ export function PartyList() {
     }
     setPartyDates(dates.sort());
     setGuests(event.guests == null ? '' : String(event.guests));
-    setLocationUrl(event.location_url ?? '');
+    setLocationUrl(authorizedLocationUrl ?? '');
   }, [modal, data.event]);
   const total = data.products.length;
   const assumed = data.products.filter(p => reservedFor(p.id, data.reservations) > 0 || p.received).length;
@@ -328,9 +338,9 @@ export function PartyList() {
     setRouletteRotation(current => current + 1440 + Math.floor(Math.random() * 360) + 1);
     window.setTimeout(() => { setRouletteResult(chosen); setRouletteSpinning(false); }, 3800);
   }
-  function openEventSettings() { const event = data.event; let dates: string[] = Array.isArray(event.party_dates) ? [...event.party_dates] : []; if (!dates.length && event.party_date) { dates = [event.party_date]; if (event.party_end_date && event.party_end_date > event.party_date) { const cursor = new Date(`${event.party_date}T12:00:00`); const end = new Date(`${event.party_end_date}T12:00:00`); while (cursor < end && dates.length < 90) { cursor.setDate(cursor.getDate() + 1); dates.push(cursor.toISOString().slice(0, 10)); } } } setPartyDates(dates.sort()); setNewPartyDate(''); setGuests(event.guests == null ? '' : String(event.guests)); setLocationUrl(event.location_url ?? ''); setModal('settings'); }
+  async function openEventSettings() { const event = data.event; const privateLocation = await getPartyLocation(undefined, password); setAuthorizedLocationUrl(privateLocation); let dates: string[] = Array.isArray(event.party_dates) ? [...event.party_dates] : []; if (!dates.length && event.party_date) { dates = [event.party_date]; if (event.party_end_date && event.party_end_date > event.party_date) { const cursor = new Date(`${event.party_date}T12:00:00`); const end = new Date(`${event.party_end_date}T12:00:00`); while (cursor < end && dates.length < 90) { cursor.setDate(cursor.getDate() + 1); dates.push(cursor.toISOString().slice(0, 10)); } } } setPartyDates(dates.sort()); setNewPartyDate(''); setGuests(event.guests == null ? '' : String(event.guests)); setLocationUrl(privateLocation ?? ''); setModal('settings'); }
   function isGoogleMapsUrl(value: string) { try { const url = new URL(value); return url.protocol === 'https:' && ['maps.app.goo.gl', 'maps.google.com', 'google.com', 'www.google.com'].includes(url.hostname) && (url.hostname !== 'google.com' && url.hostname !== 'www.google.com' || url.pathname.startsWith('/maps')); } catch { return false; } }
-  const mapsLocationUrl = data.event.location_url && isGoogleMapsUrl(data.event.location_url) ? data.event.location_url : null;
+  const mapsLocationUrl = authorizedLocationUrl && isGoogleMapsUrl(authorizedLocationUrl) ? authorizedLocationUrl : null;
   function addPartyDate() { if (!newPartyDate) return; if (partyDates.includes(newPartyDate)) { toast.info('Esse dia já foi adicionado.'); return; } if (partyDates.length >= 90) { toast.error('O limite é de 90 datas por evento.'); return; } setPartyDates([...partyDates, newPartyDate].sort()); setNewPartyDate(''); }
   async function submitBirthday(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
