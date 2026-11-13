@@ -31,7 +31,8 @@ export function PartyList() {
   const [view, setView] = useState('all');
   const [status, setStatus] = useState('all');
   const [online, setOnline] = useState(true);
-  const [history, setHistory] = useState<{ id: string; action: string; entity_name: string | null; actor_name: string; created_at: string; details: Record<string, unknown> }[]>([]);\n  const [participants, setParticipants] = useState<{ id: string; name: string; created_at: string | null }[]>([]);
+  const [history, setHistory] = useState<{ id: string; action: string; entity_name: string | null; actor_name: string; created_at: string; details: Record<string, unknown> }[]>([]);
+  const [participants, setParticipants] = useState<{ id: string; name: string; created_at: string | null }[]>([]);
   const [statsKind, setStatsKind] = useState<StatsKind>('items');
   const [notifications, setNotifications] = useState<PartyNotification[]>([]);
   const [pushEnabled, setPushEnabled] = useState(false);
@@ -257,8 +258,20 @@ export function PartyList() {
     setModal('birthday');
   }
   async function addExpense(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const f = new FormData(e.currentTarget); const ok = await act({ action: 'expense_add', description: String(f.get('description')), amount: Number(f.get('amount')), paidBy: String(f.get('paidBy')) }, 'Despesa registrada!'); if (ok) (e.currentTarget as HTMLFormElement).reset(); }
-  function summary(pending = false) { return `${data.event.name}\n${dateLabel}\n\n` + data.categories.map(c => { const items = data.products.filter(p => p.category_id === c.id && (!pending || !['complete','received'].includes(itemStatus(p, reservedFor(p.id, data.reservations))))); return items.length ? `${c.name.toUpperCase()}\n` + items.map(p => { const reserved = reservedFor(p.id, data.reservations); const remaining = remainingFor(p, reserved); const peopleNames = data.reservations.filter(r => r.product_id === p.id).map(r => `${r.participant_name}: ${number(Number(r.quantity))} ${p.unit}`).join(', '); return `• ${p.name}: ${p.quantity === null ? 'quantidade a definir' : `${number(Number(p.quantity))} ${p.unit}`} | ${statusLabels[itemStatus(p, reserved)]}${remaining !== null ? ` | faltam ${number(remaining)} ${p.unit}` : ''}${peopleNames ? `\n  ${peopleNames}` : ''}`; }).join('\n') : ''; }).filter(Boolean).join('\n\n'); }
-  function share(pending = false) { const text = pending ? `${summary(true)}\n\nParticipe: ${window.location.origin}${import.meta.env.BASE_URL}` : `🌿 Festou!\nUma festa feita por todos! Escolha o que você vai levar:\n${window.location.origin}${import.meta.env.BASE_URL}`; window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer'); }
+  function summary(pending = false) { return `${data.event.name}
+${dateLabel}
+
+` + data.categories.map(c => { const items = data.products.filter(p => p.category_id === c.id && (!pending || !['complete','received'].includes(itemStatus(p, reservedFor(p.id, data.reservations))))); return items.length ? `${c.name.toUpperCase()}
+` + items.map(p => { const reserved = reservedFor(p.id, data.reservations); const remaining = remainingFor(p, reserved); const peopleNames = data.reservations.filter(r => r.product_id === p.id).map(r => `${r.participant_name}: ${number(Number(r.quantity))} ${p.unit}`).join(', '); return `• ${p.name}: ${p.quantity === null ? 'quantidade a definir' : `${number(Number(p.quantity))} ${p.unit}`} | ${statusLabels[itemStatus(p, reserved)]}${remaining !== null ? ` | faltam ${number(remaining)} ${p.unit}` : ''}${peopleNames ? `
+  ${peopleNames}` : ''}`; }).join('
+') : ''; }).filter(Boolean).join('
+
+'); }
+  function share(pending = false) { const text = pending ? `${summary(true)}
+
+Participe: ${window.location.origin}${import.meta.env.BASE_URL}` : `🌿 Festou!
+Uma festa feita por todos! Escolha o que você vai levar:
+${window.location.origin}${import.meta.env.BASE_URL}`; window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer'); }
   async function exportReportPdf(title: string, content: string[], filename: string) {
     try {
       const { jsPDF } = await import('jspdf');
@@ -345,8 +358,10 @@ export function PartyList() {
     }) : ['Nenhuma contribuição registrada para este participante.'];
     await exportReportPdf(`Lista individual: ${p.name}`, lines, `contribuicoes-${p.name.trim().toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, '-')}.pdf`);
   }
-  async function exportPdf() { await exportReportPdf('Lista completa da festa', summary().split('\\n'), 'festou.pdf'); }
-  async function showHistory() { setBusy(true); try { const result = await mutate({ data: { action: 'audit_history', password } }); setHistory((result as unknown as { history: typeof history }).history ?? []); setModal('history'); } catch(e) { toast.error(e instanceof Error ? e.message : 'Erro ao carregar histórico.'); } finally { setBusy(false); } }\n  async function showParticipants() { setBusy(true); try { const result = await mutate({ data: { action: 'participants', password } }); setParticipants(result.participants); setModal('participants'); } catch(e) { toast.error(e instanceof Error ? e.message : 'Erro ao carregar participantes.'); } finally { setBusy(false); } }
+  async function exportPdf() { await exportReportPdf('Lista completa da festa', summary().split('\
+'), 'festou.pdf'); }
+  async function showHistory() { setBusy(true); try { const result = await mutate({ data: { action: 'audit_history', password } }); setHistory((result as unknown as { history: typeof history }).history ?? []); setModal('history'); } catch(e) { toast.error(e instanceof Error ? e.message : 'Erro ao carregar histórico.'); } finally { setBusy(false); } }
+  async function showParticipants() { setBusy(true); try { const result = await mutate({ data: { action: 'participants', password } }); setParticipants(result.participants); setModal('participants'); } catch(e) { toast.error(e instanceof Error ? e.message : 'Erro ao carregar participantes.'); } finally { setBusy(false); } }
   async function openStats(kind: StatsKind) {
     setStatsKind(kind);
     if (kind === 'people') {
@@ -364,8 +379,12 @@ export function PartyList() {
   async function deleteParticipant(p: { id: string; name: string }) {
     if (!password) { toast.error('Ação exclusiva do organizador.'); return; }
     const count = data.reservations.filter(r => r.participant_id === p.id).length;
-    const detail = count ? `\n\nAs ${count} contribuições dessa pessoa também serão liberadas.` : '';
-    if (!window.confirm(`Excluir ${p.name} da lista de participantes?${detail}\n\nEssa ação não pode ser desfeita.`)) return;
+    const detail = count ? `
+
+As ${count} contribuições dessa pessoa também serão liberadas.` : '';
+    if (!window.confirm(`Excluir ${p.name} da lista de participantes?${detail}
+
+Essa ação não pode ser desfeita.`)) return;
     const ok = await act({ action: 'participant_delete', id: p.id }, `${p.name} foi removido(a) da lista.`);
     if (ok) setParticipants(current => current.filter(item => item.id !== p.id));
   }
