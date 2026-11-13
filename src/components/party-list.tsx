@@ -71,7 +71,7 @@ export function PartyList() {
   const assumed = data.products.filter(p => reservedFor(p.id, data.reservations) > 0 || p.received).length;
   const completed = data.products.filter(p => ['complete','received'].includes(itemStatus(p, reservedFor(p.id, data.reservations)))).length;
   const progress = total ? Math.round(completed / total * 100) : 0;
-  const people = new Set(data.reservations.map(r => r.participant_name.trim().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLocaleLowerCase('pt-BR'))).size;
+  const people = new Set(data.reservations.map(r => r.participant_name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR'))).size;
   const configuredDates = data.event.party_dates?.length ? [...data.event.party_dates].sort() : data.event.party_date ? [data.event.party_date] : [];
   const startDate = configuredDates[0] ? new Date(`${configuredDates[0]}T12:00:00`) : null;
   const endDate = configuredDates.at(-1) ? new Date(`${configuredDates.at(-1)}T12:00:00`) : startDate;
@@ -92,11 +92,11 @@ export function PartyList() {
   const countdownLabel = daysUntilParty === null ? 'Data a definir' : daysUntilParty < 0 ? 'Evento já realizado' : daysUntilParty === 0 ? 'É hoje!' : `Faltam ${daysUntilParty} dias`;
   const normalizeSearch = (value: string) => value
     .normalize('NFD')
-    .replace(/[\\u0300-\\u036f]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLocaleLowerCase('pt-BR')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
-  const searchTerms = normalizeSearch(search).split(/\\s+/).filter(Boolean);
+  const searchTerms = normalizeSearch(search).split(/\s+/).filter(Boolean);
   const visible = data.products.filter(p => {
     const productCategory = data.categories.find(c => c.id === p.category_id)?.name ?? '';
     const searchableText = normalizeSearch([p.name, p.note ?? '', p.unit, productCategory].join(' '));
@@ -379,8 +379,8 @@ export function PartyList() {
       </div>
       {data.reservations.length ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from(new Set(data.reservations.map(r => r.participant_name.trim().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLocaleLowerCase('pt-BR')))).map(participantKey => {
-            const entries = data.reservations.filter(r => r.participant_name.trim().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLocaleLowerCase('pt-BR') === participantKey);
+          {Array.from(new Set(data.reservations.map(r => r.participant_name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR')))).map(participantKey => {
+            const entries = data.reservations.filter(r => r.participant_name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR') === participantKey);
             const participantName = entries[0]?.participant_name.trim() ?? 'Participante';
             return <article className="rounded-xl border border-border bg-card p-4 shadow-sm" key={participantKey}>
               <div className="mb-3 flex items-center gap-2">
