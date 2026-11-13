@@ -154,16 +154,29 @@ Deno.serve(async (req) => {
         if (error) throw error;
         return json({ ok: true });
       }
-      if (action === "push_unsubscribe") {      if (action === "push_status") {
-        if (body.endpoint !== undefined && (typeof body.endpoint !== "string" || !body.endpoint.startsWith("https://"))) return json({ error: "Dispositivo inválido." }, 400);
+      if (action === "push_status") {
+        if (body.endpoint !== undefined && (typeof body.endpoint !== "string" || !body.endpoint.startsWith("https://"))) {
+          return json({ error: "Dispositivo inválido." }, 400);
+        }
         if (!body.endpoint) return json({ enabled: false });
-        const { data, error } = await db.from("party_push_subscriptions").select("id").eq("participant_id", owner.id).eq("endpoint", body.endpoint).maybeSingle();
+        const { data, error } = await db
+          .from("party_push_subscriptions")
+          .select("id")
+          .eq("participant_id", owner.id)
+          .eq("endpoint", body.endpoint)
+          .maybeSingle();
         if (error) throw error;
         return json({ enabled: !!data });
       }
-
-        if (typeof body.endpoint !== "string") return json({ error: "Dispositivo inválido." }, 400);
-        const { error } = await db.from("party_push_subscriptions").delete().eq("participant_id", owner.id).eq("endpoint", body.endpoint);
+      if (action === "push_unsubscribe") {
+        if (typeof body.endpoint !== "string" || !body.endpoint.startsWith("https://")) {
+          return json({ error: "Dispositivo inválido." }, 400);
+        }
+        const { error } = await db
+          .from("party_push_subscriptions")
+          .delete()
+          .eq("participant_id", owner.id)
+          .eq("endpoint", body.endpoint);
         if (error) throw error;
         return json({ ok: true });
       }
