@@ -123,6 +123,17 @@ Deno.serve(async (req) => {
       if (tokenError) throw tokenError;
       return json({ id: matches[0].id, name: matches[0].name, token });
     }
+    if (action === "participant_rename") {
+      const name = typeof body.name === "string" ? body.name.trim().replace(/\\s+/g, " ") : "";
+      if (!uuid(body.token) || name.length < 2 || name.length > 60) return json({ error: "Informe um nome entre 2 e 60 caracteres." }, 400);
+      const owner = await participantByToken(db, body.token);
+      if (!owner) return json({ error: "Sua sessão não foi reconhecida. Entre novamente para alterar o nome." }, 401);
+      const { data, error } = await db.from("party_participants").update({ name }).eq("id", owner.id).select("id,name").single();
+      if (error || !data) throw error ?? new Error("Não foi possível atualizar o nome.");
+      const { error: reservationsError } = await db.from("party_reservations").update({ participant_name: name }).eq("participant_id", owner.id);
+      if (reservationsError) throw reservationsError;
+      return json(data);
+    }
     if (action === "identify") {
       if (!str(body.name, 60) || body.name.trim().length < 2 || !uuid(body.token)) return json({ error: "Nome ou identificação inválidos." }, 400);
       const { data, error } = await db.from("party_participants").upsert({ name: body.name.trim(), token_hash: await sha256(body.token) }, { onConflict: "token_hash" }).select("id,name").single();
