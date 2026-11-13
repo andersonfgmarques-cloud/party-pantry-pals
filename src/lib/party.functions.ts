@@ -8,7 +8,7 @@ const mutation = z.object({
   token: z.string().uuid().optional(),
   password: z.string().max(200).optional(),
   pin: z.string().optional(),
-  action: z.enum(['participant_directory','participant_rename','pin_set','pin_login','participant_logout','add','reserve','cancel','edit','delete','received','event','verify','participants','reservation_status','adjust_reservation','push_config','push_subscribe','push_unsubscribe','notifications','notification_read','audit_history','expenses','expense_add','expense_delete','birthday_add','birthday_edit','birthday_delete','birthday_photos','participant_delete']),
+  action: z.enum(['participant_directory','participant_rename','pin_set','pin_login','participant_logout','add','reserve','cancel','edit','delete','received','event','verify','participants','reservation_status','adjust_reservation','push_config','push_subscribe','push_unsubscribe','push_status','notifications','notification_read','audit_history','expenses','expense_add','expense_delete','birthday_add','birthday_edit','birthday_delete','birthday_photos','participant_delete']),
   id: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(100).optional(),
   categoryId: z.number().int().min(1).max(6).optional(),
@@ -88,6 +88,9 @@ export async function markPartyNotificationRead(token: string, id: string): Prom
 }
 export async function savePushSubscription(token: string, subscription: PushSubscription): Promise<void> {
   await invokePartyApi({ action: 'push_subscribe', token, subscription: subscription.toJSON() });
+}
+export async function getPushStatus(token: string, endpoint?: string): Promise<{ enabled: boolean }> {
+  return invokePartyApi({ action: 'push_status', token, ...(endpoint ? { endpoint } : {}) });
 }
 export async function removePushSubscription(token: string, endpoint: string): Promise<void> {
   await invokePartyApi({ action: 'push_unsubscribe', token, endpoint });

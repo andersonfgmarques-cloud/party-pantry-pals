@@ -43,12 +43,14 @@ const str = (value: unknown, max: number) => typeof value === "string" && value.
 
 const VAPID_PUBLIC_KEY = "BNwAcnrXDPuMJBu63N2ZIsXfYuxDMEs-ka6NcDvRHv9WCpV64ulBowK2Q7IB10dJHQWw1lBA23PL9E2pFDhrjyo";
 async function notifyParticipants(db: ReturnType<typeof createClient>, actorId: string | null, title: string, body: string, kind: "reservation" | "adjustment" | "cancellation" | "reminder" | "event") {
-  const { data: people } = await db.from("party_participants").select("id");
+  const { data: people, error: peopleError } = await db.from("party_participants").select("id");
+  if (peopleError) throw peopleError;
   const recipients = (people ?? []).filter((person) => person.id !== actorId);
   if (!recipients.length) return;
-  await db.from("party_notifications").insert(recipients.map((person) => ({ participant_id: person.id, title, body, kind })));
+  const { error: notificationError } = await db.from("party_notifications").insert(recipients.map((person) => ({ participant_id: person.id, title, body, kind })));
+  if (notificationError) throw notificationError;
   const privateKey = Deno.env.get("VAPID_PRIVATE_KEY");
-  if (!privateKey) return;
+  if (!privateKey) { console.warn("Push disabled: VAPID_PRIVATE_KEY is not configured"); return; }
   const { default: webpush } = await import("npm:web-push@3.6.7");
   webpush.setVapidDetails("mailto:contato@party-pantry-pals.app", VAPID_PUBLIC_KEY, privateKey);
   const { data: subscriptions } = await db.from("party_push_subscriptions").select("id,subscription").in("participant_id", recipients.map((person) => person.id));
@@ -141,7 +143,7 @@ Deno.serve(async (req) => {
       return json(data);
     }
     if (action === "push_config") return json({ publicKey: VAPID_PUBLIC_KEY });
-    if (action === "push_subscribe" || action === "push_unsubscribe" || action === "notifications" || action === "notification_read") {
+    if (action === "push_subscribe" || action === "push_unsubscribe" || action === "push_status" || action === "notifications" || action === "notification_read") {
       if (!uuid(body.token)) return json({ error: "Identificação do participante inválida." }, 401);
       const owner = await participantByToken(db, body.token);
       if (!owner) return json({ error: "Participante não encontrado." }, 401);
@@ -152,7 +154,14 @@ Deno.serve(async (req) => {
         if (error) throw error;
         return json({ ok: true });
       }
-      if (action === "push_unsubscribe") {
+      if (action === "push_unsubscribe") {      if (action === "push_status") {
+        if (body.endpoint !== undefined && (typeof body.endpoint !== "string" || !body.endpoint.startsWith("https://"))) return json({ error: "Dispositivo inválido." }, 400);
+        if (!body.endpoint) return json({ enabled: false });
+        const { data, error } = await db.from("party_push_subscriptions").select("id").eq("participant_id", owner.id).eq("endpoint", body.endpoint).maybeSingle();
+        if (error) throw error;
+        return json({ enabled: !!data });
+      }
+
         if (typeof body.endpoint !== "string") return json({ error: "Dispositivo inválido." }, 400);
         const { error } = await db.from("party_push_subscriptions").delete().eq("participant_id", owner.id).eq("endpoint", body.endpoint);
         if (error) throw error;
@@ -290,9 +299,14 @@ Deno.serve(async (req) => {
       return json({ ok: true, released });
     } else if (action === "reservation_status") {
       if (!uuid(body.id) || !["planned","purchased","at_home","delivered"].includes(body.status)) return json({ error: "Situação inválida." }, 400);
-      const { data: row } = await db.from("party_reservations").select("participant_id").eq("id", body.id).single();
+      const { data: row } = await db.from("party_reservations").select("participant_id,status,product_id").eq("id", body.id).single();
       if (!row || (!admin && row.participant_id !== participant?.id)) return json({ error: "Você só pode atualizar sua própria contribuição." }, 403);
       result = await db.from("party_reservations").update({ status: body.status }).eq("id", body.id);
+      if (!result.error && row.status !== body.status) {
+        const { data: product } = await db.from("party_products").select("name").eq("id", row.product_id).single();
+        const labels: Record<string,string> = { planned: "planejada", purchased: "comprada", at_home: "já está em casa", delivered: "entregue" };
+        await notifyParticipants(db, participant?.id ?? null, "Situação de contribuição atualizada", `${product?.name ?? "Um item"} agora está: ${labels[body.status] ?? body.status}.`, "event");
+      }
     } else if (action === "expense_add") {
       if (!admin || !str(body.description, 120) || !Number.isFinite(body.amount) || body.amount <= 0 || !str(body.paidBy, 60)) return json({ error: "Informe descrição, valor e responsável pelo pagamento." }, 400);
       result = await db.from("party_expenses").insert({ description: body.description.trim(), amount: body.amount, paid_by: body.paidBy.trim() });
@@ -307,7 +321,11 @@ Deno.serve(async (req) => {
       result = await db.from("party_products").delete().eq("id", body.id);
     } else if (action === "received") {
       if (!uuid(body.id) || typeof body.received !== "boolean") return json({ error: "Item não encontrado." }, 400);
+      const { data: product } = await db.from("party_products").select("name,received").eq("id", body.id).single();
       result = await db.from("party_products").update({ received: body.received }).eq("id", body.id);
+      if (!result.error && product && product.received !== body.received) {
+        await notifyParticipants(db, null, body.received ? "Item recebido!" : "Situação do item atualizada", body.received ? `${product.name} foi marcado como recebido.` : `${product.name} não está mais marcado como recebido.`, "event");
+      }
     } else if (action === "birthday_add" || action === "birthday_edit" || action === "birthday_delete") {
       if (!admin) return json({ error: "Ação exclusiva do organizador." }, 403);
       if (action === "birthday_delete") {
