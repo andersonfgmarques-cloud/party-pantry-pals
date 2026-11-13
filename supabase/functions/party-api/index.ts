@@ -99,14 +99,16 @@ Deno.serve(async (req) => {
     if (action === "pin_login") {
       const name = typeof body.name === "string" ? body.name.trim().replace(/\s+/g, " ") : "";
       if (name.length < 2 || name.length > 60 || typeof body.pin !== "string" || !/^\d{6}$/.test(body.pin)) return json({ error: "Informe seu nome e o PIN de 6 números." }, 400);
-      const nameHash = await sha256(name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR"));
+      const normalizedName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+      const nameHash = await sha256(normalizedName);
       const { data: attempt } = await db.from("party_pin_login_attempts").select("*").eq("name_hash", nameHash).maybeSingle();
       const now = Date.now();
       if (attempt?.locked_until && new Date(attempt.locked_until).getTime() > now) return json({ error: "Muitas tentativas. Aguarde 15 minutos e tente novamente." }, 429);
-      const { data: candidates, error: lookupError } = await db.from("party_participants").select("id,name,pin_hash,pin_salt").ilike("name", name).not("pin_hash", "is", null);
+      const { data: candidates, error: lookupError } = await db.from("party_participants").select("id,name,pin_hash,pin_salt").not("pin_hash", "is", null);
       if (lookupError) throw lookupError;
+      const matchingNames = (candidates ?? []).filter(candidate => candidate.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR") === normalizedName);
       const matches = [];
-      for (const candidate of candidates ?? []) {
+      for (const candidate of matchingNames) {
         if (candidate.pin_hash && candidate.pin_salt && safeEqual(await hashPin(body.pin, candidate.pin_salt), candidate.pin_hash)) matches.push(candidate);
       }
       if (matches.length !== 1) {
@@ -126,11 +128,6 @@ Deno.serve(async (req) => {
       const { data, error } = await db.from("party_participants").upsert({ name: body.name.trim(), token_hash: await sha256(body.token) }, { onConflict: "token_hash" }).select("id,name").single();
       if (error || !data) return json({ error: "Não foi possível salvar seu nome." }, 400);
       return json(data);
-    }
-    if (action === "public_participants") {
-      const { data, error } = await db.from("party_participants").select("id,name,created_at").order("name");
-      if (error) throw error;
-      return json({ ok: true, participants: data ?? [] });
     }
     if (action === "push_config") return json({ publicKey: VAPID_PUBLIC_KEY });
     if (action === "push_subscribe" || action === "push_unsubscribe" || action === "notifications" || action === "notification_read") {
@@ -161,7 +158,7 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
     const admin = typeof body.password === "string" && body.password === organizerPassword;
-    const adminActions = ["edit", "delete", "received", "event", "verify", "participants", "audit_history", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete"];
+    const adminActions = ["edit", "delete", "received", "event", "verify", "participants", "audit_history", "expenses", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete"];
     if (adminActions.includes(action) && !admin) return json({ error: "Senha incorreta ou acesso exclusivo do organizador." }, 401);
     let participant: { id: string; name: string } | null = null;
     if (!admin) {
@@ -180,6 +177,11 @@ Deno.serve(async (req) => {
       const { data, error } = await db.from("party_participants").select("id,name,created_at").order("name");
       if (error) throw error;
       return json({ ok: true, participants: data ?? [] });
+    }
+    if (action === "expenses") {
+      const { data, error } = await db.from("party_expenses").select("*").order("created_at");
+      if (error) throw error;
+      return json({ ok: true, expenses: data ?? [] });
     }
     if (action === "participant_delete") {
       if (!admin || !uuid(body.id)) return json({ error: "Ação exclusiva do organizador ou participante inválido." }, 403);

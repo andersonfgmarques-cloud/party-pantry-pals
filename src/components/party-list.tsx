@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { partyQuery } from '@/lib/party.queries';
-import { identifyParticipant, changeParty, loginParticipant, logoutParticipant, setParticipantPin, getPartyNotifications, markPartyNotificationRead, savePushSubscription, getPushPublicKey, type PartyNotification } from '@/lib/party.functions';
-import { reservedFor, itemStatus, remainingFor, number, statusLabels, type Product } from '@/lib/party';
+import { identifyParticipant, changeParty, loginParticipant, logoutParticipant, setParticipantPin, getPartyNotifications, markPartyNotificationRead, savePushSubscription, getPushPublicKey, getPartyExpenses, type PartyNotification } from '@/lib/party.functions';
+import { reservedFor, itemStatus, remainingFor, number, statusLabels, type Product, type Expense } from '@/lib/party';
 import garden from '@/assets/chacara-garden.jpg';
 
 const icons = [Coffee, Sandwich, Beef, Flame, CakeSlice, GlassWater];
@@ -36,6 +36,7 @@ export function PartyList() {
   const [statsKind, setStatsKind] = useState<StatsKind>('items');
   const [dashboardFilter, setDashboardFilter] = useState<'all' | 'unassigned' | 'partial' | 'guaranteed' | 'received' | 'undefined'>('all');
   const [notifications, setNotifications] = useState<PartyNotification[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [partyDates, setPartyDates] = useState<string[]>([]);
   const [guests, setGuests] = useState('');
@@ -70,6 +71,13 @@ export function PartyList() {
     const focus = () => qc.invalidateQueries({ queryKey: ['party'] }); window.addEventListener('focus', focus);
     return () => { supabase.removeChannel(channel); window.removeEventListener('focus', focus); window.removeEventListener('online', updateOnline); window.removeEventListener('offline', updateOnline); };
   }, [qc]);
+  useEffect(() => {
+    if (!password) { setExpenses([]); return; }
+    if (modal !== 'finance') return;
+    let active = true;
+    getPartyExpenses(password).then(rows => { if (active) setExpenses(rows); }).catch(error => { if (active) toast.error(error instanceof Error ? error.message : 'Não foi possível carregar as despesas.'); });
+    return () => { active = false; };
+  }, [modal, password]);
   useEffect(() => {
     if (modal !== 'settings') return;
     const event = data.event;
@@ -264,7 +272,7 @@ export function PartyList() {
     setSelectedBirthday(person ?? null);
     setModal('birthday');
   }
-  async function addExpense(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const f = new FormData(e.currentTarget); const ok = await act({ action: 'expense_add', description: String(f.get('description')), amount: Number(f.get('amount')), paidBy: String(f.get('paidBy')) }, 'Despesa registrada!'); if (ok) (e.currentTarget as HTMLFormElement).reset(); }
+  async function addExpense(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const form = e.currentTarget; const f = new FormData(form); const ok = await act({ action: 'expense_add', description: String(f.get('description')), amount: Number(f.get('amount')), paidBy: String(f.get('paidBy')) }, 'Despesa registrada!'); if (ok) { form.reset(); try { setExpenses(await getPartyExpenses(password)); } catch { toast.error('Despesa salva, mas não foi possível atualizar a lista.'); } } }
   function summary(pending = false) { return `${data.event.name}\n${dateLabel}\n\n` + data.categories.map(c => { const items = data.products.filter(p => p.category_id === c.id && (!pending || !['complete','received'].includes(itemStatus(p, reservedFor(p.id, data.reservations))))); return items.length ? `${c.name.toUpperCase()}\n` + items.map(p => { const reserved = reservedFor(p.id, data.reservations); const remaining = remainingFor(p, reserved); const peopleNames = data.reservations.filter(r => r.product_id === p.id).map(r => `${r.participant_name}: ${number(Number(r.quantity))} ${p.unit}`).join(', '); return `• ${p.name}: ${p.quantity === null ? 'quantidade a definir' : `${number(Number(p.quantity))} ${p.unit}`} | ${statusLabels[itemStatus(p, reserved)]}${remaining !== null ? ` | faltam ${number(remaining)} ${p.unit}` : ''}${peopleNames ? `\n  ${peopleNames}` : ''}`; }).join('\n') : ''; }).filter(Boolean).join('\n\n'); }
   function share(pending = false) { const text = pending ? `${summary(true)}\n\nParticipe: ${window.location.origin}${import.meta.env.BASE_URL}` : `🌿 Festou!\nUma festa feita por todos! Escolha o que você vai levar:\n${window.location.origin}${import.meta.env.BASE_URL}`; window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer'); }
   async function exportReportPdf(title: string, content: string[], filename: string) {
@@ -361,8 +369,17 @@ export function PartyList() {
     if (kind === 'people') {
       setBusy(true);
       try {
-        const result = await mutate({ data: { action: 'public_participants' } });
-        setParticipants(result.participants);
+        const uniqueParticipants = new Map<string, { id: string; name: string; created_at: null }>();
+        data.reservations.forEach(reservation => {
+          if (!uniqueParticipants.has(reservation.participant_id)) {
+            uniqueParticipants.set(reservation.participant_id, {
+              id: reservation.participant_id,
+              name: reservation.participant_name,
+              created_at: null,
+            });
+          }
+        });
+        setParticipants([...uniqueParticipants.values()]);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Não foi possível carregar os participantes.');
         return;
@@ -471,7 +488,7 @@ export function PartyList() {
       <label>Link do local no Google Maps (opcional)<input type="url" inputMode="url" value={locationUrl} onChange={e => setLocationUrl(e.target.value)} maxLength={2048} placeholder="https://maps.app.goo.gl/..." autoComplete="url"/></label>
       <p className="help-text">No Google Maps, toque em Compartilhar, copie o link e cole aqui. O botão “Como chegar” aparecerá para todos os convidados.</p>
       <Button type="submit" disabled={busy}>{busy ? 'Salvando...' : 'Salvar alterações'}</Button></form>}
-    {modal === 'finance' && <div className="space-y-4"><div className="rounded-lg bg-secondary p-4"><p className="text-xs text-muted-foreground">Total registrado</p><strong className="text-2xl">R$ {number(data.expenses.reduce((sum, expense) => sum + Number(expense.amount), 0))}</strong></div><form className="modal-form" onSubmit={addExpense}><label>Descrição<input name="description" required maxLength={120} placeholder="Ex.: compra de bebidas"/></label><label>Valor (R$)<input name="amount" type="number" min="0.01" step="0.01" required/></label><label>Quem pagou<input name="paidBy" required maxLength={60} placeholder="Nome do responsável"/></label><Button type="submit" disabled={busy}>Registrar despesa</Button></form><div className="max-h-56 overflow-y-auto">{data.expenses.map(expense => <div className="reservation-row" key={expense.id}><div><strong>{expense.description}</strong><p className="help-text">Pago por {expense.paid_by}</p></div><div className="text-right"><strong>R$ {number(Number(expense.amount))}</strong><Button size="sm" variant="ghost" onClick={() => act({ action: 'expense_delete', id: expense.id }, 'Despesa removida.')}>Excluir</Button></div></div>)}{!data.expenses.length && <p className="help-text py-4">Nenhuma despesa registrada.</p>}</div></div>}
+    {modal === 'finance' && <div className="space-y-4"><div className="rounded-lg bg-secondary p-4"><p className="text-xs text-muted-foreground">Total registrado</p><strong className="text-2xl">R$ {number(expenses.reduce((sum, expense) => sum + Number(expense.amount), 0))}</strong></div><form className="modal-form" onSubmit={addExpense}><label>Descrição<input name="description" required maxLength={120} placeholder="Ex.: compra de bebidas"/></label><label>Valor (R$)<input name="amount" type="number" min="0.01" step="0.01" required/></label><label>Quem pagou<input name="paidBy" required maxLength={60} placeholder="Nome do responsável"/></label><Button type="submit" disabled={busy}>Registrar despesa</Button></form><div className="max-h-56 overflow-y-auto">{expenses.map(expense => <div className="reservation-row" key={expense.id}><div><strong>{expense.description}</strong><p className="help-text">Pago por {expense.paid_by}</p></div><div className="text-right"><strong>R$ {number(Number(expense.amount))}</strong><Button size="sm" variant="ghost" onClick={async () => { if (await act({ action: 'expense_delete', id: expense.id }, 'Despesa removida.')) { try { setExpenses(await getPartyExpenses(password)); } catch { toast.error('Não foi possível atualizar a lista de despesas.'); } } }}>Excluir</Button></div></div>)}{!expenses.length && <p className="help-text py-4">Nenhuma despesa registrada.</p>}</div></div>}
     {modal === 'participants' && <div className="max-h-96 overflow-y-auto">{participants.map(p => <div className="reservation-row" key={p.id}><span>{p.name}</span><div className="flex items-center gap-2"><span className="text-muted-foreground text-xs">{data.reservations.filter(r => r.participant_id === p.id).length} contribuições</span><Button size="icon" variant="ghost" title={`Excluir ${p.name}`} aria-label={`Excluir participante ${p.name}`} disabled={busy} onClick={() => deleteParticipant(p)}><Trash2 size={16}/></Button></div></div>)}{!participants.length && <p className="help-text py-6">Ainda não há participantes.</p>}</div>}
     {modal === 'dashboard' && <div className="max-h-[65vh] space-y-4 overflow-y-auto pr-1">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

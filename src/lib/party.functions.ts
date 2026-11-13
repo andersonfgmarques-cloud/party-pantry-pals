@@ -1,14 +1,14 @@
 import { z } from 'zod';
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
-import type { PartyData } from './party';
+import type { Expense, PartyData } from './party';
 
 const identity = z.object({ name: z.string().trim().min(2).max(60), token: z.string().uuid() });
 const mutation = z.object({
   token: z.string().uuid().optional(),
   password: z.string().max(200).optional(),
   pin: z.string().optional(),
-  action: z.enum(['pin_set','pin_login','participant_logout','add','reserve','cancel','edit','delete','received','event','verify','participants','public_participants','reservation_status','adjust_reservation','push_config','push_subscribe','push_unsubscribe','notifications','notification_read','audit_history','expense_add','expense_delete','birthday_add','birthday_edit','birthday_delete','participant_delete']),
+  action: z.enum(['pin_set','pin_login','participant_logout','add','reserve','cancel','edit','delete','received','event','verify','participants','reservation_status','adjust_reservation','push_config','push_subscribe','push_unsubscribe','notifications','notification_read','audit_history','expenses','expense_add','expense_delete','birthday_add','birthday_edit','birthday_delete','participant_delete']),
   id: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(100).optional(),
   categoryId: z.number().int().min(1).max(6).optional(),
@@ -53,19 +53,18 @@ async function invokePartyApi<T>(body: Record<string, unknown>): Promise<T> {
 }
 
 export async function getParty(): Promise<PartyData> {
-  const [event, categories, products, reservations, expenses, birthdays] = await Promise.all([
+  const [event, categories, products, reservations, birthdays] = await Promise.all([
     supabase.from('party_event').select('*').eq('id', 1).single(),
     supabase.from('party_categories').select('*').order('id'),
     supabase.from('party_products').select('*').order('created_at').order('name'),
     supabase.from('party_reservations').select('*').order('created_at'),
-    supabase.from('party_expenses').select('*').order('created_at'),
     supabase.from('party_birthday_people').select('*').order('name'),
   ]);
-  for (const result of [event, categories, products, reservations, expenses, birthdays]) {
+  for (const result of [event, categories, products, reservations, birthdays]) {
     if (result.error) throw new Error('Não foi possível carregar a lista. Verifique a conexão e as permissões do Supabase.');
   }
   if (!event.data) throw new Error('Evento não encontrado.');
-  return { event: event.data, categories: categories.data ?? [], products: products.data ?? [], reservations: reservations.data ?? [], expenses: expenses.data ?? [], birthdays: birthdays.data ?? [] };
+  return { event: event.data, categories: categories.data ?? [], products: products.data ?? [], reservations: reservations.data ?? [], birthdays: birthdays.data ?? [] };
 }
 
 export async function identifyParticipant({ data }: { data: z.infer<typeof identity> }): Promise<{id:string;name:string}> {
@@ -106,4 +105,9 @@ export async function loginParticipant(name: string, pin: string): Promise<{ id:
 }
 export async function logoutParticipant(token: string): Promise<void> {
   await invokePartyApi({ action: 'participant_logout', token });
+}
+
+export async function getPartyExpenses(password: string): Promise<Expense[]> {
+  const result = await invokePartyApi<{ expenses: Expense[] }>({ action: 'expenses', password });
+  return result.expenses ?? [];
 }
