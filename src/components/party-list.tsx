@@ -527,16 +527,16 @@ export function PartyList() {
   async function openStats(kind: StatsKind) {
     setStatsKind(kind);
     if (kind === 'people') {
-      // The public dashboard exposes the aggregate count only. Do not call
-      // the organizer-only directory endpoint with an empty password.
-      if (!password) {
+      // Visitors see only the aggregate. Registered participants and the
+      // organizer can view the nominal directory; the server validates either credential.
+      if (!password && !person?.token) {
         setParticipants([]);
         setModal('stats');
         return;
       }
       setBusy(true);
       try {
-        const result = await mutate({ data: { action: 'participant_directory', password } });
+        const result = await mutate({ data: { action: 'participant_directory', ...(password ? { password } : { token: person?.token }) } });
         setParticipants(result.participants);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Não foi possível carregar os participantes.');
