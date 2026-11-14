@@ -40,7 +40,7 @@ export function PartyList() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [birthdayPhotos, setBirthdayPhotos] = useState<Record<string, string>>({});
   const [pushEnabled, setPushEnabled] = useState(false);
-  const unreadNotifications = notifications.length;
+  const unreadNotifications = notifications.filter(item => !item.read_at).length;
   useEffect(() => {
     let active = true;
     setAuthorizedLocationUrl(null);
@@ -74,7 +74,7 @@ export function PartyList() {
     void refreshDirectory();
     const refresh = () => qc.invalidateQueries({ queryKey: ['party'] });
     const channel = supabase.channel(`party-${crypto.randomUUID()}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'party_products' }, () => { refresh(); if (person?.token) window.setTimeout(() => getPartyNotifications(person.token).then(rows => setNotifications(rows.filter(item => !item.read_at))).catch(() => {}), 700); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'party_products' }, () => { refresh(); if (person?.token) window.setTimeout(() => getPartyNotifications(person.token).then(rows => setNotifications(rows)).catch(() => {}), 700); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'party_participants' }, () => { void refreshDirectory(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'party_reservations' }, payload => {
         refresh();
@@ -219,21 +219,16 @@ export function PartyList() {
 
   async function openNotifications() {
     if (!person) { setPendingModal('notifications'); setModal('identity'); return; }
-    // Opening the bell marks every notification for this participant as read.
-    // Clear the list and badge immediately; restore unread items if the server rejects it.
-    const previous = notifications;
-    setNotifications([]);
     setModal('notifications');
     try {
+      // Load the full history first, then mark unread entries as read without removing them.
+      const history = await getPartyNotifications(person.token);
+      setNotifications(history);
       await markAllPartyNotificationsRead(person.token);
+      const readAt = new Date().toISOString();
+      setNotifications(current => current.map(item => item.read_at ? item : { ...item, read_at: readAt }));
     } catch {
-      try {
-        const latest = await getPartyNotifications(person.token);
-        setNotifications(latest.filter(item => !item.read_at));
-      } catch {
-        setNotifications(previous);
-      }
-      toast.error('Não foi possível marcar as notificações como lidas. Tente novamente.');
+      toast.error('Não foi possível atualizar as notificações. Tente novamente.');
     }
   }
   async function enablePushNotifications() {
@@ -259,12 +254,12 @@ export function PartyList() {
   }
   async function readNotification(notification: PartyNotification) {
     if (!person || notification.read_at) return;
-    // Remove immediately from this user's bell; restore it if the server rejects the read.
-    setNotifications(current => current.filter(item => item.id !== notification.id));
+    const readAt = new Date().toISOString();
+    setNotifications(current => current.map(item => item.id === notification.id ? { ...item, read_at: readAt } : item));
     try {
       await markPartyNotificationRead(person.token, notification.id);
     } catch {
-      setNotifications(current => [...current, notification].sort((a, b) => b.created_at.localeCompare(a.created_at)));
+      setNotifications(current => current.map(item => item.id === notification.id ? { ...item, read_at: null } : item));
       toast.error('Não foi possível atualizar a notificação. Tente novamente.');
     }
   }
