@@ -84,9 +84,14 @@ Deno.serve(async (req) => {
     const action = body?.action;
 
     if (action === "public_event") {
-      const { data, error } = await db.from("party_event").select("id,name,party_date,party_end_date,party_dates,guests").eq("id", 1).single();
+      const [{ data, error }, { count, error: countError }] = await Promise.all([
+        db.from("party_event").select("id,name,party_date,party_end_date,party_dates,guests").eq("id", 1).single(),
+        // Expose only an aggregate count, never participant names or identifiers.
+        db.from("party_participants").select("id", { count: "exact", head: true }),
+      ]);
       if (error) throw error;
-      return json({ event: data });
+      if (countError) throw countError;
+      return json({ event: data, participantCount: count ?? 0 });
     }
 
     if (action === "event_location" && uuid(body.token)) {
@@ -128,8 +133,8 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
     if (action === "pin_login") {
-      const name = typeof body.name === "string" ? body.name.trim().replace(/\\s+/g, " ") : "";
-      if (name.length < 2 || name.length > 60 || typeof body.pin !== "string" || !/^\\d{6}$/.test(body.pin)) return json({ error: "Informe seu nome e o PIN de 6 números." }, 400);
+      const name = typeof body.name === "string" ? body.name.trim().replace(/\s+/g, " ") : "";
+      if (name.length < 2 || name.length > 60 || typeof body.pin !== "string" || !/^\d{6}$/.test(body.pin)) return json({ error: "Informe seu nome e o PIN de 6 números." }, 400);
       // Throttle by IP and by participant+IP. A name-only lockout would let
       // anyone who knows a participant's name deny that participant access.
       const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
@@ -137,7 +142,7 @@ Deno.serve(async (req) => {
         || req.headers.get("x-real-ip")?.trim()
         || forwardedFor;
       if (!clientIp) return json({ error: "Não foi possível validar a origem da conexão. Tente novamente." }, 503);
-      const normalizedName = name.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR");
+      const normalizedName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
       const nameHash = await sha256(normalizedName);
       const ipHash = await sha256(`party-pin-login-ip:${clientIp}`);
       const pairHash = await sha256(`party-pin-login-pair:${nameHash}:${ipHash}`);
@@ -155,7 +160,7 @@ Deno.serve(async (req) => {
 
       const { data: candidates, error: lookupError } = await db.from("party_participants").select("id,name,pin_hash,pin_salt").not("pin_hash", "is", null);
       if (lookupError) throw lookupError;
-      const matchingNames = (candidates ?? []).filter(candidate => candidate.name.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR") === normalizedName);
+      const matchingNames = (candidates ?? []).filter(candidate => candidate.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR") === normalizedName);
       const matches = [];
       for (const candidate of matchingNames) {
         if (candidate.pin_hash && candidate.pin_salt && safeEqual(await hashPin(body.pin, candidate.pin_salt), candidate.pin_hash)) matches.push(candidate);
@@ -288,18 +293,21 @@ Deno.serve(async (req) => {
       const clientIp = req.headers.get("cf-connecting-ip")?.trim()
         || req.headers.get("x-real-ip")?.trim()
         || forwardedFor;
-      if (!clientIp) return json({ error: "Não foi possível validar a origem da conexão. Tente novamente." }, 503);
-      const ipHash = await sha256(`party-admin-rate-limit:${clientIp}:${organizerPassword}`);
-      const { data: checkRows, error: checkError } = await db.rpc("party_admin_login_guard", {
-        p_ip_hash: ipHash,
-        p_action: "check",
-      });
-      if (checkError) throw checkError;
-      const check = Array.isArray(checkRows) ? checkRows[0] : checkRows;
-      if (check?.is_locked) {
-        return json({ error: "Muitas tentativas de acesso. Aguarde 15 minutos antes de tentar novamente.", retryAfter: check.retry_after_seconds }, 429);
-      }
+
+      // A valid organizer password must always be able to recover from a
+      // previous lockout. Apply the lockout only to invalid credentials.
       if (!admin) {
+        if (!clientIp) return json({ error: "Não foi possível validar a origem da conexão. Tente novamente." }, 503);
+        const ipHash = await sha256(`party-admin-rate-limit:${clientIp}:${organizerPassword}`);
+        const { data: checkRows, error: checkError } = await db.rpc("party_admin_login_guard", {
+          p_ip_hash: ipHash,
+          p_action: "check",
+        });
+        if (checkError) throw checkError;
+        const check = Array.isArray(checkRows) ? checkRows[0] : checkRows;
+        if (check?.is_locked) {
+          return json({ error: "Muitas tentativas de acesso. Aguarde 15 minutos antes de tentar novamente.", retryAfter: check.retry_after_seconds }, 429);
+        }
         const { data: failedRows, error: failedError } = await db.rpc("party_admin_login_guard", {
           p_ip_hash: ipHash,
           p_action: "fail",
@@ -311,11 +319,16 @@ Deno.serve(async (req) => {
         }
         return json({ error: "Senha incorreta ou acesso exclusivo do organizador." }, 401);
       }
-      const { error: resetError } = await db.rpc("party_admin_login_guard", {
-        p_ip_hash: ipHash,
-        p_action: "reset",
-      });
-      if (resetError) throw resetError;
+
+      // Correct credentials clear any previous lockout for this IP.
+      if (clientIp) {
+        const ipHash = await sha256(`party-admin-rate-limit:${clientIp}:${organizerPassword}`);
+        const { error: resetError } = await db.rpc("party_admin_login_guard", {
+          p_ip_hash: ipHash,
+          p_action: "reset",
+        });
+        if (resetError) throw resetError;
+      }
     }
     let participant: { id: string; name: string } | null = null;
     if (!admin) {

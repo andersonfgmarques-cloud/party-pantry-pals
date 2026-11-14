@@ -161,7 +161,7 @@ export function PartyList() {
   const assumed = data.products.filter(p => reservedFor(p.id, data.reservations) > 0 || p.received).length;
   const completed = data.products.filter(p => ['complete','received'].includes(itemStatus(p, reservedFor(p.id, data.reservations)))).length;
   const progress = total ? Math.round(completed / total * 100) : 0;
-  const people = participants.length;
+  const people = data.participantCount;
   const dashboardItems = data.products.map(product => ({ product, reserved: reservedFor(product.id, data.reservations), remaining: remainingFor(product, reservedFor(product.id, data.reservations)), reservations: data.reservations.filter(r => r.product_id === product.id), state: itemStatus(product, reservedFor(product.id, data.reservations)) }));
   const unassignedItems = dashboardItems.filter(item => !item.product.received && item.reserved === 0);
   const partialItems = dashboardItems.filter(item => item.state === 'partial');
