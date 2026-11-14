@@ -507,16 +507,136 @@ export function PartyList() {
   }
   async function exportStatsPdf(kind: StatsKind = statsKind) {
     const titles = { items: 'Lista completa de itens', assumed: 'Itens assumidos', available: 'Itens ainda disponíveis', people: 'Participantes e contribuições' };
-    const content = kind === 'people' ? reportLines(kind) : reportLines(kind);
-    await exportReportPdf(titles[kind], content, `festou-${kind}.pdf`);
+    if (kind === 'items' || kind === 'assumed' || kind === 'available') {
+      const products = data.products.filter(p => kind === 'items' || (kind === 'assumed'
+        ? reservedFor(p.id, data.reservations) > 0 || p.received
+        : !p.received && itemStatus(p, reservedFor(p.id, data.reservations)) !== 'complete'));
+      const rows = products.map(p => {
+        const taken = reservedFor(p.id, data.reservations);
+        const remaining = remainingFor(p, taken);
+        return {
+          name: p.name,
+          quantity: p.quantity === null ? `${number(taken)} ${p.unit} reservados` : `${number(taken)} / ${number(Number(p.quantity))} ${p.unit}`,
+          status: p.received ? 'Recebido' : remaining === 0 ? 'Quantidade completa' : remaining === null ? 'Quantidade a definir' : `Faltam ${number(remaining)} ${p.unit}`,
+        };
+      });
+      await exportChecklistPdf(titles[kind], rows, `festou-${kind}.pdf`);
+      return;
+    }
+    await exportReportPdf(titles[kind], reportLines(kind), `festou-${kind}.pdf`);
+  }
+  async function exportChecklistPdf(
+    title: string,
+    rows: { name: string; quantity: string; status?: string }[],
+    filename: string,
+  ) {
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 14;
+      const gap = 7;
+      const colWidth = (pageWidth - margin * 2 - gap) / 2;
+      const cardPadding = 4;
+      const cardGap = 3;
+      let page = 1;
+      let columnY: [number, number] = [62, 62];
+      const bottom = pageHeight - 17;
+
+      const header = () => {
+        doc.setTextColor(25, 55, 40);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(19);
+        doc.text('Festou!', margin, 18);
+        doc.setFontSize(14);
+        doc.text(title, margin, 28, { maxWidth: pageWidth - margin * 2 });
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(90, 105, 96);
+        doc.text(data.event.name, margin, 36);
+        doc.text(dateLabel, margin, 42);
+        doc.text(`Emitido em ${new Date().toLocaleString('pt-BR')}`, margin, 48);
+        doc.setDrawColor(210, 220, 214);
+        doc.line(margin, 53, pageWidth - margin, 53);
+      };
+      const newPage = () => {
+        doc.addPage();
+        page += 1;
+        columnY = [62, 62];
+        header();
+      };
+      header();
+
+      for (const row of rows) {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        const nameLines = doc.splitTextToSize(row.name, colWidth - 19);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        const quantityLines = doc.splitTextToSize(row.quantity, colWidth - 19);
+        const statusLines = row.status ? doc.splitTextToSize(row.status, colWidth - 19) : [];
+        const cardHeight = Math.max(18, 8 + nameLines.length * 4.5 + quantityLines.length * 4 + statusLines.length * 3.7);
+        let column: 0 | 1 = columnY[0] <= columnY[1] ? 0 : 1;
+        if (columnY[column] + cardHeight > bottom) {
+          const otherColumn: 0 | 1 = column === 0 ? 1 : 0;
+          if (columnY[otherColumn] + cardHeight <= bottom) column = otherColumn;
+          else {
+            newPage();
+            column = 0;
+          }
+        }
+        const y = columnY[column];
+        const x = margin + column * (colWidth + gap);
+        doc.setDrawColor(215, 224, 218);
+        doc.setFillColor(250, 252, 250);
+        doc.roundedRect(x, y, colWidth, cardHeight, 2, 2, 'FD');
+        doc.setDrawColor(75, 105, 87);
+        doc.setLineWidth(0.45);
+        doc.rect(x + cardPadding, y + 5, 4, 4);
+        let textY = y + 8;
+        doc.setTextColor(35, 50, 40);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.text(nameLines, x + 11, textY);
+        textY += nameLines.length * 4.5 + 1;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text(quantityLines, x + 11, textY);
+        textY += quantityLines.length * 4;
+        if (statusLines.length) {
+          doc.setTextColor(95, 110, 100);
+          doc.setFontSize(8);
+          doc.text(statusLines, x + 11, textY);
+        }
+        columnY[column] = y + cardHeight + cardGap;
+      }
+
+      const pages = doc.getNumberOfPages();
+      for (let current = 1; current <= pages; current++) {
+        doc.setPage(current);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(120);
+        doc.text(`Festou! · Página ${current} de ${pages}`, pageWidth / 2, pageHeight - 8, { align: 'center' });
+      }
+      doc.save(filename);
+      toast.success('PDF de conferência gerado com sucesso!');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível gerar o PDF.');
+    }
   }
   async function exportParticipantPdf(p: { id: string; name: string }) {
     const entries = data.reservations.filter(r => r.participant_id === p.id);
-    const lines = entries.length ? entries.flatMap(r => {
+    const rows = entries.map(r => {
       const product = data.products.find(x => x.id === r.product_id);
-      return [`${product?.name ?? 'Produto'} — ${number(Number(r.quantity))} ${product?.unit ?? ''}`, `  ${r.source === 'home' ? 'Já tem em casa' : 'Vai comprar'}`, ''];
-    }) : ['Nenhuma contribuição registrada para este participante.'];
-    await exportReportPdf(`Lista individual: ${p.name}`, lines, `contribuicoes-${p.name.trim().toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, '-')}.pdf`);
+      return {
+        name: product?.name ?? 'Produto',
+        quantity: `${number(Number(r.quantity))} ${product?.unit ?? ''}`,
+        status: r.source === 'home' ? 'Já tem em casa' : 'Vai comprar',
+      };
+    });
+    await exportChecklistPdf(`Lista individual: ${p.name}`, rows, `contribuicoes-${p.name.trim().toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, '-')}.pdf`);
   }
   async function exportPdf() { await exportReportPdf('Lista completa da festa', summary().split('\\n'), 'festou.pdf'); }
   async function showHistory() { setBusy(true); try { const result = await mutate({ data: { action: 'audit_history', password } }); setHistory((result as unknown as { history: typeof history }).history ?? []); setModal('history'); } catch(e) { toast.error(e instanceof Error ? e.message : 'Erro ao carregar histórico.'); } finally { setBusy(false); } }
