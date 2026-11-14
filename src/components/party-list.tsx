@@ -66,17 +66,9 @@ export function PartyList() {
     try { const stored = localStorage.getItem('party-identity'); if (stored) { const p = JSON.parse(stored); if (p.token && p.name && p.id) setPerson(p); } } catch { /* unavailable storage */ }
     const updateOnline = () => setOnline(navigator.onLine);
     updateOnline(); window.addEventListener('online', updateOnline); window.addEventListener('offline', updateOnline);
-    const refreshDirectory = async () => {
-      try {
-        const result = await mutate({ data: { action: 'participant_directory' } });
-        setParticipants(result.participants);
-      } catch { /* directory will retry when the participants icon is opened */ }
-    };
-    void refreshDirectory();
     const refresh = () => qc.invalidateQueries({ queryKey: ['party'] });
     const channel = supabase.channel(`party-${crypto.randomUUID()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'party_products' }, () => { refresh(); if (person?.token) window.setTimeout(() => getPartyNotifications(person.token).then(rows => setNotifications(rows)).catch(() => {}), 700); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'party_participants' }, () => { void refreshDirectory(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'party_reservations' }, payload => {
         refresh();
         if (person?.token) window.setTimeout(() => getPartyNotifications(person.token).then(setNotifications).catch(() => {}), 700);
@@ -537,7 +529,7 @@ export function PartyList() {
     if (kind === 'people') {
       setBusy(true);
       try {
-        const result = await mutate({ data: { action: 'participant_directory' } });
+        const result = await mutate({ data: { action: 'participant_directory', password } });
         setParticipants(result.participants);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : 'Não foi possível carregar os participantes.');
