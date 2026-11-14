@@ -287,7 +287,7 @@ Deno.serve(async (req) => {
     }
     const admin = typeof body.password === "string" && safeEqual(body.password, organizerPassword);
     // Every organizer-only action must pass the same IP-based rate limiter.
-    const adminActions = ["add", "edit", "delete", "received", "event", "event_location", "verify", "participants", "participant_directory", "audit_history", "expenses", "expense_add", "expense_delete", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete"];
+    const adminActions = ["add", "edit", "delete", "received", "event", "event_location", "verify", "participants", "audit_history", "expenses", "expense_add", "expense_delete", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete"];
     if (adminActions.includes(action)) {
       const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
       const clientIp = req.headers.get("cf-connecting-ip")?.trim()
