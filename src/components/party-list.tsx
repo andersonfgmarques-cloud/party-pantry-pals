@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { partyQuery } from '@/lib/party.queries';
-import { identifyParticipant, changeParty, loginParticipant, logoutParticipant, setParticipantPin, getPartyNotifications, markPartyNotificationRead, savePushSubscription, getPushPublicKey, getPartyExpenses, getPartyBirthdayPhotos, renameParticipant, getPushStatus, getPartyLocation, type PartyNotification } from '@/lib/party.functions';
+import { identifyParticipant, changeParty, loginParticipant, logoutParticipant, setParticipantPin, getPartyNotifications, markPartyNotificationRead, markAllPartyNotificationsRead, savePushSubscription, getPushPublicKey, getPartyExpenses, getPartyBirthdayPhotos, renameParticipant, getPushStatus, getPartyLocation, type PartyNotification } from '@/lib/party.functions';
 import { reservedFor, itemStatus, remainingFor, number, statusLabels, type Product, type Expense } from '@/lib/party';
 import garden from '@/assets/chacara-garden.jpg';
 
@@ -219,8 +219,22 @@ export function PartyList() {
 
   async function openNotifications() {
     if (!person) { setPendingModal('notifications'); setModal('identity'); return; }
-    try { setNotifications((await getPartyNotifications(person.token)).filter(item => !item.read_at)); setModal('notifications'); }
-    catch { toast.error('Não foi possível carregar as notificações.'); }
+    // Opening the bell marks every notification for this participant as read.
+    // Clear the list and badge immediately; restore unread items if the server rejects it.
+    const previous = notifications;
+    setNotifications([]);
+    setModal('notifications');
+    try {
+      await markAllPartyNotificationsRead(person.token);
+    } catch {
+      try {
+        const latest = await getPartyNotifications(person.token);
+        setNotifications(latest.filter(item => !item.read_at));
+      } catch {
+        setNotifications(previous);
+      }
+      toast.error('Não foi possível marcar as notificações como lidas. Tente novamente.');
+    }
   }
   async function enablePushNotifications() {
     if (!person) { toast.info('Informe seu nome antes de ativar as notificações.'); setPendingModal('notifications'); setModal('identity'); return; }
