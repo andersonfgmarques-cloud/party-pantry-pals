@@ -288,18 +288,21 @@ Deno.serve(async (req) => {
       const clientIp = req.headers.get("cf-connecting-ip")?.trim()
         || req.headers.get("x-real-ip")?.trim()
         || forwardedFor;
-      if (!clientIp) return json({ error: "Não foi possível validar a origem da conexão. Tente novamente." }, 503);
-      const ipHash = await sha256(`party-admin-rate-limit:${clientIp}:${organizerPassword}`);
-      const { data: checkRows, error: checkError } = await db.rpc("party_admin_login_guard", {
-        p_ip_hash: ipHash,
-        p_action: "check",
-      });
-      if (checkError) throw checkError;
-      const check = Array.isArray(checkRows) ? checkRows[0] : checkRows;
-      if (check?.is_locked) {
-        return json({ error: "Muitas tentativas de acesso. Aguarde 15 minutos antes de tentar novamente.", retryAfter: check.retry_after_seconds }, 429);
-      }
+
+      // A valid organizer password must always be able to recover from a
+      // previous lockout. Apply the lockout only to invalid credentials.
       if (!admin) {
+        if (!clientIp) return json({ error: "Não foi possível validar a origem da conexão. Tente novamente." }, 503);
+        const ipHash = await sha256(`party-admin-rate-limit:${clientIp}:${organizerPassword}`);
+        const { data: checkRows, error: checkError } = await db.rpc("party_admin_login_guard", {
+          p_ip_hash: ipHash,
+          p_action: "check",
+        });
+        if (checkError) throw checkError;
+        const check = Array.isArray(checkRows) ? checkRows[0] : checkRows;
+        if (check?.is_locked) {
+          return json({ error: "Muitas tentativas de acesso. Aguarde 15 minutos antes de tentar novamente.", retryAfter: check.retry_after_seconds }, 429);
+        }
         const { data: failedRows, error: failedError } = await db.rpc("party_admin_login_guard", {
           p_ip_hash: ipHash,
           p_action: "fail",
@@ -311,11 +314,16 @@ Deno.serve(async (req) => {
         }
         return json({ error: "Senha incorreta ou acesso exclusivo do organizador." }, 401);
       }
-      const { error: resetError } = await db.rpc("party_admin_login_guard", {
-        p_ip_hash: ipHash,
-        p_action: "reset",
-      });
-      if (resetError) throw resetError;
+
+      // Correct credentials clear any previous lockout for this IP.
+      if (clientIp) {
+        const ipHash = await sha256(`party-admin-rate-limit:${clientIp}:${organizerPassword}`);
+        const { error: resetError } = await db.rpc("party_admin_login_guard", {
+          p_ip_hash: ipHash,
+          p_action: "reset",
+        });
+        if (resetError) throw resetError;
+      }
     }
     let participant: { id: string; name: string } | null = null;
     if (!admin) {
