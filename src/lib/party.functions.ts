@@ -29,7 +29,10 @@ const mutation = z.object({
   paidBy: z.string().trim().min(2).max(60).optional(),
   subscription: z.record(z.string(), z.unknown()).optional(),
   endpoint: z.string().url().optional(),
-  photoData: z.string().max(4200000).optional(),\n  familyId: z.number().int().min(1).max(6).nullable().optional(),\n  referencePrice: z.number().min(0).nullable().optional(),\n  referenceSource: z.enum(['Assaí','Higa','Max Atacadista','Preço informado','Estimativa']).optional(),
+  photoData: z.string().max(4200000).optional(),
+  familyId: z.number().int().min(1).max(6).nullable().optional(),
+  referencePrice: z.number().min(0).nullable().optional(),
+  referenceSource: z.enum(['Assaí','Higa','Max Atacadista','Preço informado','Estimativa']).optional(),
 });
 type Mutation = z.infer<typeof mutation>;
 type Participant = { id: string; name: string; created_at: string | null };
