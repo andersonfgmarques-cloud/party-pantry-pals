@@ -43,26 +43,33 @@ const str = (value: unknown, max: number) => typeof value === "string" && value.
 
 const VAPID_PUBLIC_KEY = "BNwAcnrXDPuMJBu63N2ZIsXfYuxDMEs-ka6NcDvRHv9WCpV64ulBowK2Q7IB10dJHQWw1lBA23PL9E2pFDhrjyo";
 async function notifyParticipants(db: ReturnType<typeof createClient>, actorId: string | null, title: string, body: string, kind: "reservation" | "adjustment" | "cancellation" | "reminder" | "event") {
-  const { data: people, error: peopleError } = await db.from("party_participants").select("id");
-  if (peopleError) throw peopleError;
-  const recipients = (people ?? []).filter((person) => person.id !== actorId);
-  if (!recipients.length) return;
-  const { error: notificationError } = await db.from("party_notifications").insert(recipients.map((person) => ({ participant_id: person.id, title, body, kind })));
-  if (notificationError) throw notificationError;
-  const privateKey = Deno.env.get("VAPID_PRIVATE_KEY");
-  if (!privateKey) { console.warn("Push disabled: VAPID_PRIVATE_KEY is not configured"); return; }
-  const { default: webpush } = await import("npm:web-push@3.6.7");
-  webpush.setVapidDetails("mailto:contato@party-pantry-pals.app", VAPID_PUBLIC_KEY, privateKey);
-  const { data: subscriptions } = await db.from("party_push_subscriptions").select("id,subscription").in("participant_id", recipients.map((person) => person.id));
-  await Promise.all((subscriptions ?? []).map(async (row) => {
-    try {
-      await webpush.sendNotification(row.subscription, JSON.stringify({ title, body, url: "./" }));
-    } catch (error) {
-      const status = (error as { statusCode?: number })?.statusCode;
-      if (status === 404 || status === 410) await db.from("party_push_subscriptions").delete().eq("id", row.id);
-      else console.error("Push delivery failed", status ?? "unknown");
-    }
-  }));
+  // Notifications are secondary effects: never report a saved reservation as failed
+  // merely because notification delivery is temporarily unavailable.
+  try {
+    const { data: people, error: peopleError } = await db.from("party_participants").select("id");
+    if (peopleError) throw peopleError;
+    const recipients = (people ?? []).filter((person) => person.id !== actorId);
+    if (!recipients.length) return;
+    const { error: notificationError } = await db.from("party_notifications").insert(recipients.map((person) => ({ participant_id: person.id, title, body, kind })));
+    if (notificationError) throw notificationError;
+    const privateKey = Deno.env.get("VAPID_PRIVATE_KEY");
+    if (!privateKey) { console.warn("Push disabled: VAPID_PRIVATE_KEY is not configured"); return; }
+    const { default: webpush } = await import("npm:web-push@3.6.7");
+    webpush.setVapidDetails("mailto:contato@party-pantry-pals.app", VAPID_PUBLIC_KEY, privateKey);
+    const { data: subscriptions, error: subscriptionsError } = await db.from("party_push_subscriptions").select("id,subscription").in("participant_id", recipients.map((person) => person.id));
+    if (subscriptionsError) throw subscriptionsError;
+    await Promise.all((subscriptions ?? []).map(async (row) => {
+      try {
+        await webpush.sendNotification(row.subscription, JSON.stringify({ title, body, url: "./" }));
+      } catch (error) {
+        const status = (error as { statusCode?: number })?.statusCode;
+        if (status === 404 || status === 410) await db.from("party_push_subscriptions").delete().eq("id", row.id);
+        else console.error("Push delivery failed", status ?? "unknown");
+      }
+    }));
+  } catch (error) {
+    console.error("Participant notification failed after primary operation", error);
+  }
 }
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -118,7 +125,8 @@ Deno.serve(async (req) => {
       if (name.length < 2 || name.length > 60 || typeof body.pin !== "string" || !/^\d{6}$/.test(body.pin)) return json({ error: "Informe seu nome e o PIN de 6 números." }, 400);
       const normalizedName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
       const nameHash = await sha256(normalizedName);
-      const { data: attempt } = await db.from("party_pin_login_attempts").select("*").eq("name_hash", nameHash).maybeSingle();
+      const { data: attempt, error: attemptError } = await db.from("party_pin_login_attempts").select("*").eq("name_hash", nameHash).maybeSingle();
+      if (attemptError) throw attemptError;
       const now = Date.now();
       if (attempt?.locked_until && new Date(attempt.locked_until).getTime() > now) return json({ error: "Muitas tentativas. Aguarde 15 minutos e tente novamente." }, 429);
       const { data: candidates, error: lookupError } = await db.from("party_participants").select("id,name,pin_hash,pin_salt").not("pin_hash", "is", null);
@@ -131,17 +139,19 @@ Deno.serve(async (req) => {
       if (matches.length !== 1) {
         const windowExpired = !attempt || now - new Date(attempt.window_started_at).getTime() > 15 * 60 * 1000;
         const attempts = windowExpired ? 1 : Number(attempt.attempts) + 1;
-        await db.from("party_pin_login_attempts").upsert({ name_hash: nameHash, attempts, window_started_at: windowExpired ? new Date().toISOString() : attempt.window_started_at, locked_until: attempts >= 5 ? new Date(now + 15 * 60 * 1000).toISOString() : null });
+        const { error: attemptSaveError } = await db.from("party_pin_login_attempts").upsert({ name_hash: nameHash, attempts, window_started_at: windowExpired ? new Date().toISOString() : attempt.window_started_at, locked_until: attempts >= 5 ? new Date(now + 15 * 60 * 1000).toISOString() : null });
+        if (attemptSaveError) throw attemptSaveError;
         return json({ error: "Nome ou PIN incorreto. Confira os dados e tente novamente." }, 401);
       }
-      await db.from("party_pin_login_attempts").delete().eq("name_hash", nameHash);
+      const { error: clearAttemptError } = await db.from("party_pin_login_attempts").delete().eq("name_hash", nameHash);
+      if (clearAttemptError) throw clearAttemptError;
       const token = crypto.randomUUID();
       const { error: tokenError } = await db.from("party_participant_sessions").insert({ participant_id: matches[0].id, token_hash: await sha256(token) });
       if (tokenError) throw tokenError;
       return json({ id: matches[0].id, name: matches[0].name, token });
     }
     if (action === "participant_rename") {
-      const name = typeof body.name === "string" ? body.name.trim().replace(/\\s+/g, " ") : "";
+      const name = typeof body.name === "string" ? body.name.trim().replace(/\s+/g, " ") : "";
       if (!uuid(body.token) || name.length < 2 || name.length > 60) return json({ error: "Informe um nome entre 2 e 60 caracteres." }, 400);
       const owner = await participantByToken(db, body.token);
       if (!owner) return json({ error: "Sua sessão não foi reconhecida. Entre novamente para alterar o nome." }, 401);
@@ -210,8 +220,9 @@ Deno.serve(async (req) => {
       if (error) throw error;
       return json({ ok: true, participants: data ?? [] });
     }
-    const admin = typeof body.password === "string" && body.password === organizerPassword;
-    const adminActions = ["edit", "delete", "received", "event", "event_location", "verify", "participants", "audit_history", "expenses", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete"];
+    const admin = typeof body.password === "string" && safeEqual(body.password, organizerPassword);
+    // Every organizer-only action must pass the same IP-based rate limiter.
+    const adminActions = ["add", "edit", "delete", "received", "event", "event_location", "verify", "participants", "audit_history", "expenses", "expense_add", "expense_delete", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete"];
     if (adminActions.includes(action)) {
       const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
       const clientIp = req.headers.get("cf-connecting-ip")?.trim()
