@@ -541,8 +541,7 @@ export function PartyList() {
       const cardPadding = 4;
       const cardGap = 3;
       let page = 1;
-      let column = 0;
-      let y = 62;
+      let columnY: [number, number] = [62, 62];
       const bottom = pageHeight - 17;
 
       const header = () => {
@@ -564,8 +563,7 @@ export function PartyList() {
       const newPage = () => {
         doc.addPage();
         page += 1;
-        column = 0;
-        y = 62;
+        columnY = [62, 62];
         header();
       };
       header();
@@ -579,10 +577,15 @@ export function PartyList() {
         const quantityLines = doc.splitTextToSize(row.quantity, colWidth - 19);
         const statusLines = row.status ? doc.splitTextToSize(row.status, colWidth - 19) : [];
         const cardHeight = Math.max(18, 8 + nameLines.length * 4.5 + quantityLines.length * 4 + statusLines.length * 3.7);
-        if (y + cardHeight > bottom) {
-          if (column === 0) { column = 1; y = 62; }
-          else newPage();
+        let column: 0 | 1 = columnY[0] <= columnY[1] ? 0 : 1;
+        if (columnY[column] + cardHeight > bottom) {
+          if (columnY[1 - column] + cardHeight <= bottom) column = column === 0 ? 1 : 0;
+          else {
+            newPage();
+            column = 0;
+          }
         }
+        const y = columnY[column];
         const x = margin + column * (colWidth + gap);
         doc.setDrawColor(215, 224, 218);
         doc.setFillColor(250, 252, 250);
@@ -605,9 +608,7 @@ export function PartyList() {
           doc.setFontSize(8);
           doc.text(statusLines, x + 11, textY);
         }
-        y += cardHeight + cardGap;
-        if (column === 0) column = 1;
-        else { column = 0; y += 0; }
+        columnY[column] = y + cardHeight + cardGap;
       }
 
       const pages = doc.getNumberOfPages();
