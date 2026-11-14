@@ -105,7 +105,14 @@ Deno.serve(async (req) => {
       if (!owner) return json({ error: "Esta sessão já foi encerrada." }, 401);
       const { error: sessionError } = await db.from("party_participant_sessions").delete().eq("token_hash", tokenHash);
       if (sessionError) throw sessionError;
-      const { error: legacyError } = await db.from("party_participants").update({ token_hash: null }).eq("id", owner.id).eq("token_hash", tokenHash);
+      // Legacy tokens live on party_participants.token_hash (NOT NULL).
+      // Rotate that hash instead of setting it to null, which would fail and
+      // leave the old token valid. Session-table tokens are revoked by deletion above.
+      const replacementHash = await sha256(crypto.randomUUID());
+      const { error: legacyError } = await db.from("party_participants")
+        .update({ token_hash: replacementHash })
+        .eq("id", owner.id)
+        .eq("token_hash", tokenHash);
       if (legacyError) throw legacyError;
       return json({ ok: true });
     }
@@ -227,7 +234,7 @@ Deno.serve(async (req) => {
     }
     const admin = typeof body.password === "string" && safeEqual(body.password, organizerPassword);
     // Every organizer-only action must pass the same IP-based rate limiter.
-    const adminActions = ["add", "edit", "delete", "received", "event", "event_location", "verify", "participants", "audit_history", "expenses", "expense_add", "expense_delete", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete"];
+    const adminActions = ["add", "edit", "delete", "received", "event", "event_location", "verify", "participants", "participant_directory", "audit_history", "expenses", "expense_add", "expense_delete", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete"];
     if (adminActions.includes(action)) {
       const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
       const clientIp = req.headers.get("cf-connecting-ip")?.trim()
