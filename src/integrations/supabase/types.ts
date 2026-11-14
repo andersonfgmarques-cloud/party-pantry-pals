@@ -76,18 +76,21 @@ export type Database = {
       party_participants: {
         Row: {
           created_at: string | null
+          family_id: number | null
           id: string
           name: string
           token_hash: string
         }
         Insert: {
           created_at?: string | null
+          family_id?: number | null
           id?: string
           name: string
           token_hash: string
         }
         Update: {
           created_at?: string | null
+          family_id?: number | null
           id?: string
           name?: string
           token_hash?: string
@@ -103,6 +106,9 @@ export type Database = {
           note: string | null
           quantity: number | null
           received: boolean
+          reference_price: number | null
+          reference_source: string | null
+          reference_updated_at: string | null
           unit: string
         }
         Insert: {
@@ -113,6 +119,9 @@ export type Database = {
           note?: string | null
           quantity?: number | null
           received?: boolean
+          reference_price?: number | null
+          reference_source?: string | null
+          reference_updated_at?: string | null
           unit?: string
         }
         Update: {
@@ -123,6 +132,9 @@ export type Database = {
           note?: string | null
           quantity?: number | null
           received?: boolean
+          reference_price?: number | null
+          reference_source?: string | null
+          reference_updated_at?: string | null
           unit?: string
         }
         Relationships: [
