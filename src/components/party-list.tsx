@@ -527,6 +527,13 @@ export function PartyList() {
   async function openStats(kind: StatsKind) {
     setStatsKind(kind);
     if (kind === 'people') {
+      // The public dashboard exposes the aggregate count only. Do not call
+      // the organizer-only directory endpoint with an empty password.
+      if (!password) {
+        setParticipants([]);
+        setModal('stats');
+        return;
+      }
       setBusy(true);
       try {
         const result = await mutate({ data: { action: 'participant_directory', password } });
@@ -700,7 +707,7 @@ export function PartyList() {
       </article>) : <p className="help-text py-6 text-center">Nenhuma atividade registrada ainda. As próximas alterações aparecerão aqui.</p>}
     </div>}
     {modal === 'stats' && <div className="space-y-3"><div className="flex flex-wrap justify-end gap-2">{statsKind === 'available' && <Button size="sm" onClick={shareAvailableList}><MessageCircle size={15}/> Compartilhar lista</Button>}<Button size="sm" variant="outline" onClick={() => exportStatsPdf()}><Download size={15}/> Exportar PDF</Button></div><div className="participant-report-scroll max-h-[220px] overflow-y-scroll space-y-2 pr-1">
-      {statsKind === 'people' && (participants.length ? participants.map(p => {
+      {statsKind === 'people' && (!password ? <div className="rounded-lg border border-border bg-muted/40 p-4 text-center"><strong>{data.participantCount} participantes cadastrados</strong><p className="help-text mt-1">A relação nominal e a gestão dos participantes ficam disponíveis na área do organizador.</p></div> : participants.length ? participants.map(p => {
         const entries = data.reservations.filter(r => r.participant_id === p.id);
         return <div className="stats-list-row" key={p.id}><div className="min-w-0"><strong>{p.name}</strong><p>{entries.length ? entries.map(r => { const product = data.products.find(x => x.id === r.product_id); return `${product?.name ?? 'Produto'} · ${number(Number(r.quantity))} ${product?.unit ?? ''}`; }).join(' | ') : 'Ainda não assumiu nenhum produto'}</p></div><div className="flex items-center gap-1"><span className="stats-list-count">{entries.length} {entries.length === 1 ? 'item' : 'itens'}</span>{password && <Button size="icon" variant="ghost" title={`Excluir ${p.name}`} aria-label={`Excluir ${p.name}`} disabled={busy} onClick={() => deleteParticipant(p)}><Trash2 size={16}/></Button>}</div></div>;
       }) : <p className="help-text py-6 text-center">Ainda não há participantes cadastrados.</p>)}
