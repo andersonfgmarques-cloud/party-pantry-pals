@@ -91,6 +91,9 @@ export async function getPartyNotifications(token: string): Promise<PartyNotific
 export async function markPartyNotificationRead(token: string, id: string): Promise<void> {
   await invokePartyApi({ action: 'notification_read', token, id });
 }
+export async function markAllPartyNotificationsRead(token: string): Promise<void> {
+  await invokePartyApi({ action: 'notification_read_all', token });
+}
 export async function savePushSubscription(token: string, subscription: PushSubscription): Promise<void> {
   await invokePartyApi({ action: 'push_subscribe', token, subscription: subscription.toJSON() });
 }
