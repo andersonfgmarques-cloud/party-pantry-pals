@@ -39,6 +39,7 @@ export function PartyList() {
   const [notifications, setNotifications] = useState<PartyNotification[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [birthdayPhotos, setBirthdayPhotos] = useState<Record<string, string>>({});
+  const [birthdayPhotoPreview, setBirthdayPhotoPreview] = useState<{ src: string; name: string } | null>(null);
   const [pushEnabled, setPushEnabled] = useState(false);
   const unreadNotifications = notifications.filter(item => !item.read_at).length;
   useEffect(() => {
@@ -566,7 +567,7 @@ export function PartyList() {
       </div>
       {data.birthdays.length && !person && !password && <p className="help-text">As fotos são protegidas. Informe seu nome para visualizar o álbum. <Button size="sm" variant="outline" onClick={() => open('identity')}>Identificar-me</Button></p>}
       {data.birthdays.length ? <div className="birthday-grid">{data.birthdays.map(person => <article className="birthday-card" key={person.id}>
-        {birthdayPhotos[person.photo_path] ? <img src={birthdayPhotos[person.photo_path]} alt={person.name} loading="lazy"/> : <div className="birthday-photo-placeholder" aria-label="Foto protegida"><LockKeyhole size={24}/></div>}
+        {birthdayPhotos[person.photo_path] ? <button type="button" className="birthday-photo-button" aria-label={`Ampliar foto de ${person.name}`} onClick={() => setBirthdayPhotoPreview({ src: birthdayPhotos[person.photo_path], name: person.name })}><img src={birthdayPhotos[person.photo_path]} alt={person.name} loading="lazy"/><span className="birthday-photo-hint">Ampliar foto</span></button> : <div className="birthday-photo-placeholder" aria-label="Foto protegida"><LockKeyhole size={24}/></div>}
         <strong>{person.name}</strong>
         {password && <div className="birthday-actions"><Button size="sm" variant="outline" onClick={() => openBirthdayEditor(person)}><Pencil size={14}/> Editar</Button><Button size="sm" variant="ghost" onClick={() => { if (window.confirm(`Excluir ${person.name} do álbum de aniversariantes?`)) act({ action: 'birthday_delete', id: person.id }, 'Aniversariante removido.'); }}><Trash2 size={14}/> Excluir</Button></div>}
       </article>)}</div> : <div className="birthday-empty"><Cake size={28}/><p>Ainda não há aniversariantes cadastrados.</p>{password && <Button size="sm" variant="outline" onClick={() => openBirthdayEditor()}><ImagePlus size={16}/> Adicionar primeira foto</Button>}</div>}
@@ -719,5 +720,11 @@ export function PartyList() {
       }) : <p className="help-text py-6 text-center">Não há itens nesta situação. Tudo certo!</p>)}
     </div></div>}
     </DialogContent></Dialog>
+    <Dialog open={birthdayPhotoPreview !== null} onOpenChange={open => { if (!open) setBirthdayPhotoPreview(null); }}>
+      <DialogContent className="birthday-photo-dialog max-w-3xl">
+        <DialogHeader><DialogTitle>{birthdayPhotoPreview?.name ?? "Foto do aniversariante"}</DialogTitle><DialogDescription>Visualização ampliada da foto.</DialogDescription></DialogHeader>
+        {birthdayPhotoPreview && <img src={birthdayPhotoPreview.src} alt={birthdayPhotoPreview.name} className="birthday-photo-expanded"/>}
+      </DialogContent>
+    </Dialog>
   </>;
 }
