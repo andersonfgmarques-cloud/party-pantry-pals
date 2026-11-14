@@ -579,7 +579,8 @@ export function PartyList() {
         const cardHeight = Math.max(18, 8 + nameLines.length * 4.5 + quantityLines.length * 4 + statusLines.length * 3.7);
         let column: 0 | 1 = columnY[0] <= columnY[1] ? 0 : 1;
         if (columnY[column] + cardHeight > bottom) {
-          if (columnY[1 - column] + cardHeight <= bottom) column = column === 0 ? 1 : 0;
+          const otherColumn: 0 | 1 = column === 0 ? 1 : 0;
+          if (columnY[otherColumn] + cardHeight <= bottom) column = otherColumn;
           else {
             newPage();
             column = 0;
