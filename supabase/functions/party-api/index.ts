@@ -227,11 +227,6 @@ Deno.serve(async (req) => {
       if (error) throw error;
       return json({ ok: true });
     }
-    if (action === "participant_directory") {
-      const { data, error } = await db.from("party_participants").select("id,name,created_at").order("name");
-      if (error) throw error;
-      return json({ ok: true, participants: data ?? [] });
-    }
     const admin = typeof body.password === "string" && safeEqual(body.password, organizerPassword);
     // Every organizer-only action must pass the same IP-based rate limiter.
     const adminActions = ["add", "edit", "delete", "received", "event", "event_location", "verify", "participants", "participant_directory", "audit_history", "expenses", "expense_add", "expense_delete", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete"];
@@ -289,6 +284,11 @@ Deno.serve(async (req) => {
         const signedUrl = signedByPath.get(person.photo_path);
         return signedUrl ? [{ id: person.id, name: person.name, photo_path: person.photo_path, signed_url: signedUrl }] : [];
       }) });
+    }
+    if (action === "participant_directory") {
+      const { data, error } = await db.from("party_participants").select("id,name,created_at").order("name");
+      if (error) throw error;
+      return json({ ok: true, participants: data ?? [] });
     }
     if (action === "verify") return json({ ok: true, participants: [] });
     if (action === "audit_history") {
