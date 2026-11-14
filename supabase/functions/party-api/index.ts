@@ -169,6 +169,31 @@ Deno.serve(async (req) => {
       return json(data);
     }
     if (action === "identify") {
+      // Limit participant identity creation per client IP to reduce automated record spam.
+      const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+      const clientIp = req.headers.get("cf-connecting-ip")?.trim()
+        || req.headers.get("x-real-ip")?.trim()
+        || forwardedFor;
+      if (!clientIp) return json({ error: "Não foi possível validar a origem da conexão. Tente novamente." }, 503);
+      const ipHash = await sha256(`party-identify-rate-limit:${clientIp}`);
+      const { data: checkRows, error: checkError } = await db.rpc("party_admin_login_guard", {
+        p_ip_hash: ipHash,
+        p_action: "check",
+      });
+      if (checkError) throw checkError;
+      const check = Array.isArray(checkRows) ? checkRows[0] : checkRows;
+      if (check?.is_locked) {
+        return json({ error: "Muitas tentativas de identificação. Aguarde 15 minutos antes de tentar novamente.", retryAfter: check.retry_after_seconds }, 429);
+      }
+      const { data: attemptRows, error: attemptError } = await db.rpc("party_admin_login_guard", {
+        p_ip_hash: ipHash,
+        p_action: "fail",
+      });
+      if (attemptError) throw attemptError;
+      const attempt = Array.isArray(attemptRows) ? attemptRows[0] : attemptRows;
+      if (attempt?.is_locked) {
+        return json({ error: "Limite de identificações atingido. Aguarde 15 minutos antes de tentar novamente.", retryAfter: attempt.retry_after_seconds }, 429);
+      }
       if (!str(body.name, 60) || body.name.trim().length < 2 || !uuid(body.token)) return json({ error: "Nome ou identificação inválidos." }, 400);
       const { data, error } = await db.from("party_participants").upsert({ name: body.name.trim(), token_hash: await sha256(body.token) }, { onConflict: "token_hash" }).select("id,name").single();
       if (error || !data) return json({ error: "Não foi possível salvar seu nome." }, 400);
