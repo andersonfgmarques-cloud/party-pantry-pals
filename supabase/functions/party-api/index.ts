@@ -287,7 +287,7 @@ Deno.serve(async (req) => {
     }
     const admin = typeof body.password === "string" && safeEqual(body.password, organizerPassword);
     // Every organizer-only action must pass the same IP-based rate limiter.
-    const adminActions = ["add", "edit", "delete", "received", "event", "event_location", "verify", "participants", "audit_history", "expenses", "expense_add", "expense_delete", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete"];
+    const adminActions = ["add", "edit", "delete", "received", "event", "event_location", "verify", "participants", "audit_history", "expenses", "expense_add", "expense_delete", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete", "contribution_overview", "family_assign", "product_reference_price"];
     if (adminActions.includes(action)) {
       const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
       const clientIp = req.headers.get("cf-connecting-ip")?.trim()
@@ -372,6 +372,38 @@ Deno.serve(async (req) => {
       if (error) throw error;
       return json({ ok: true, expenses: data ?? [] });
     }
+    if (action === "contribution_overview") {
+      const [families, people, products, reservations] = await Promise.all([
+        db.from("party_families").select("id,name,target_amount").order("id"),
+        db.from("party_participants").select("id,name,family_id,created_at").order("name"),
+        db.from("party_products").select("id,name,unit,reference_price,reference_source,reference_updated_at").order("name"),
+        db.from("party_reservations").select("id,product_id,participant_id,participant_name,quantity,source,status").order("created_at"),
+      ]);
+      for (const result of [families, people, products, reservations]) if (result.error) throw result.error;
+      return json({ families: families.data ?? [], participants: people.data ?? [], products: products.data ?? [], reservations: reservations.data ?? [] });
+    }
+    if (action === "family_assign") {
+      if (!admin || !uuid(body.participantId) || !(body.familyId === null || (Number.isInteger(body.familyId) && body.familyId >= 1 && body.familyId <= 6))) {
+        return json({ error: "Selecione uma família válida para o participante." }, 400);
+      }
+      const { error } = await db.from("party_participants").update({ family_id: body.familyId }).eq("id", body.participantId);
+      if (error) throw error;
+      return json({ ok: true });
+    }
+    if (action === "product_reference_price") {
+      if (!admin || !uuid(body.id) || !(body.referencePrice === null || (Number.isFinite(body.referencePrice) && body.referencePrice >= 0)) ||
+          !["Assaí", "Higa", "Max Atacadista", "Preço informado", "Estimativa"].includes(body.referenceSource)) {
+        return json({ error: "Informe um preço e uma fonte de referência válidos." }, 400);
+      }
+      const { error } = await db.from("party_products").update({
+        reference_price: body.referencePrice,
+        reference_source: body.referencePrice === null ? null : body.referenceSource,
+        reference_updated_at: body.referencePrice === null ? null : new Date().toISOString(),
+      }).eq("id", body.id);
+      if (error) throw error;
+      return json({ ok: true });
+    }
+
     if (action === "participant_delete") {
       if (!admin || !uuid(body.id)) return json({ error: "Ação exclusiva do organizador ou participante inválido." }, 403);
       const { data: target, error: lookupError } = await db.from("party_participants").select("id,name").eq("id", body.id).maybeSingle();
