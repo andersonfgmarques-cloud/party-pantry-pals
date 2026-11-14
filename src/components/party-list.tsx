@@ -40,7 +40,7 @@ export function PartyList() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [birthdayPhotos, setBirthdayPhotos] = useState<Record<string, string>>({});
   const [pushEnabled, setPushEnabled] = useState(false);
-  const unreadNotifications = notifications.filter(item => !item.read_at).length;
+  const unreadNotifications = notifications.length;
   useEffect(() => {
     let active = true;
     setAuthorizedLocationUrl(null);
@@ -74,7 +74,7 @@ export function PartyList() {
     void refreshDirectory();
     const refresh = () => qc.invalidateQueries({ queryKey: ['party'] });
     const channel = supabase.channel(`party-${crypto.randomUUID()}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'party_products' }, () => { refresh(); if (person?.token) window.setTimeout(() => getPartyNotifications(person.token).then(setNotifications).catch(() => {}), 700); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'party_products' }, () => { refresh(); if (person?.token) window.setTimeout(() => getPartyNotifications(person.token).then(rows => setNotifications(rows.filter(item => !item.read_at))).catch(() => {}), 700); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'party_participants' }, () => { void refreshDirectory(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'party_reservations' }, payload => {
         refresh();
@@ -109,7 +109,7 @@ export function PartyList() {
 
     let active = true;
     getPartyNotifications(person.token)
-      .then(rows => { if (active) setNotifications(rows); })
+      .then(rows => { if (active) setNotifications(rows.filter(item => !item.read_at)); })
       .catch(() => {});
 
     const syncPushStatus = async () => {
@@ -219,7 +219,7 @@ export function PartyList() {
 
   async function openNotifications() {
     if (!person) { setPendingModal('notifications'); setModal('identity'); return; }
-    try { setNotifications(await getPartyNotifications(person.token)); setModal('notifications'); }
+    try { setNotifications((await getPartyNotifications(person.token)).filter(item => !item.read_at)); setModal('notifications'); }
     catch { toast.error('Não foi possível carregar as notificações.'); }
   }
   async function enablePushNotifications() {
@@ -245,10 +245,14 @@ export function PartyList() {
   }
   async function readNotification(notification: PartyNotification) {
     if (!person || notification.read_at) return;
+    // Remove immediately from this user's bell; restore it if the server rejects the read.
+    setNotifications(current => current.filter(item => item.id !== notification.id));
     try {
       await markPartyNotificationRead(person.token, notification.id);
-      setNotifications(current => current.map(item => item.id === notification.id ? { ...item, read_at: new Date().toISOString() } : item));
-    } catch { toast.error('Não foi possível atualizar a notificação.'); }
+    } catch {
+      setNotifications(current => [...current, notification].sort((a, b) => b.created_at.localeCompare(a.created_at)));
+      toast.error('Não foi possível atualizar a notificação. Tente novamente.');
+    }
   }
   async function submitParticipantName(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
