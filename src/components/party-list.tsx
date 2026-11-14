@@ -387,6 +387,25 @@ export function PartyList() {
   async function addExpense(e: FormEvent<HTMLFormElement>) { e.preventDefault(); const form = e.currentTarget; const f = new FormData(form); const ok = await act({ action: 'expense_add', description: String(f.get('description')), amount: Number(f.get('amount')), paidBy: String(f.get('paidBy')) }, 'Despesa registrada!'); if (ok) { form.reset(); try { setExpenses(await getPartyExpenses(password)); } catch { toast.error('Despesa salva, mas não foi possível atualizar a lista.'); } } }
   function summary(pending = false) { return `${data.event.name}\n${dateLabel}\n\n` + data.categories.map(c => { const items = data.products.filter(p => p.category_id === c.id && (!pending || !['complete','received'].includes(itemStatus(p, reservedFor(p.id, data.reservations))))); return items.length ? `${c.name.toUpperCase()}\n` + items.map(p => { const reserved = reservedFor(p.id, data.reservations); const remaining = remainingFor(p, reserved); const peopleNames = data.reservations.filter(r => r.product_id === p.id).map(r => `${r.participant_name}: ${number(Number(r.quantity))} ${p.unit}`).join(', '); return `• ${p.name}: ${p.quantity === null ? 'quantidade a definir' : `${number(Number(p.quantity))} ${p.unit}`} | ${statusLabels[itemStatus(p, reserved)]}${remaining !== null ? ` | faltam ${number(remaining)} ${p.unit}` : ''}${peopleNames ? `\n  ${peopleNames}` : ''}`; }).join('\n') : ''; }).filter(Boolean).join('\n\n'); }
   function share(pending = false) { const text = pending ? `${summary(true)}\n\nParticipe: ${window.location.origin}${import.meta.env.BASE_URL}` : `🌿 Festou!\nUma festa feita por todos! Escolha o que você vai levar:\n${window.location.origin}${import.meta.env.BASE_URL}`; window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer'); }
+  function shareAvailableList() {
+    const pending = data.products.filter(product => {
+      const reserved = reservedFor(product.id, data.reservations);
+      return !product.received && itemStatus(product, reserved) !== 'complete';
+    });
+    if (!pending.length) { toast.info('Não há itens pendentes para compartilhar.'); return; }
+    const grouped = data.categories.map(category => {
+      const items = pending.filter(product => product.category_id === category.id);
+      if (!items.length) return '';
+      return `* ${category.name.toUpperCase()}\n` + items.map(product => {
+        const reserved = reservedFor(product.id, data.reservations);
+        const remaining = remainingFor(product, reserved);
+        const quantity = remaining === null ? 'Quantidade a definir' : `Faltam ${number(remaining)} ${product.unit}`;
+        return `• ${product.name} — ${quantity}`;
+      }).join('\n');
+    }).filter(Boolean).join('\n\n');
+    const message = `🌿 *Festou! — O que ainda falta*\n${data.event.name}\n${dateLabel}\n\n${grouped}\n\nQuer ajudar? Acesse a lista e escolha o que pode levar:\n${appUrl()}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+  }
   const appUrl = () => `${window.location.origin}${import.meta.env.BASE_URL}`;
   const qrImageUrl = () => `${window.location.origin}${import.meta.env.BASE_URL}festou-app-qrcode.png`;
   async function shareQrImage() {
@@ -687,7 +706,7 @@ export function PartyList() {
         <div className="flex items-start justify-between gap-3"><div className="min-w-0"><strong className="text-sm">{item.action}</strong><p className="text-sm text-muted-foreground">{item.entity_name ?? 'Registro'} · {item.actor_name}</p></div><time className="shrink-0 text-xs text-muted-foreground">{new Date(item.created_at).toLocaleString('pt-BR')}</time></div>
       </article>) : <p className="help-text py-6 text-center">Nenhuma atividade registrada ainda. As próximas alterações aparecerão aqui.</p>}
     </div>}
-    {modal === 'stats' && <div className="space-y-3"><div className="flex justify-end"><Button size="sm" onClick={() => exportStatsPdf()}><Download size={15}/> Exportar PDF</Button></div><div className="participant-report-scroll max-h-[220px] overflow-y-scroll space-y-2 pr-1">
+    {modal === 'stats' && <div className="space-y-3"><div className="flex flex-wrap justify-end gap-2">{statsKind === 'available' && <Button size="sm" onClick={shareAvailableList}><MessageCircle size={15}/> Compartilhar lista</Button>}<Button size="sm" variant="outline" onClick={() => exportStatsPdf()}><Download size={15}/> Exportar PDF</Button></div><div className="participant-report-scroll max-h-[220px] overflow-y-scroll space-y-2 pr-1">
       {statsKind === 'people' && (participants.length ? participants.map(p => {
         const entries = data.reservations.filter(r => r.participant_id === p.id);
         return <div className="stats-list-row" key={p.id}><div className="min-w-0"><strong>{p.name}</strong><p>{entries.length ? entries.map(r => { const product = data.products.find(x => x.id === r.product_id); return `${product?.name ?? 'Produto'} · ${number(Number(r.quantity))} ${product?.unit ?? ''}`; }).join(' | ') : 'Ainda não assumiu nenhum produto'}</p></div><div className="flex items-center gap-1"><span className="stats-list-count">{entries.length} {entries.length === 1 ? 'item' : 'itens'}</span>{password && <Button size="icon" variant="ghost" title={`Excluir ${p.name}`} aria-label={`Excluir ${p.name}`} disabled={busy} onClick={() => deleteParticipant(p)}><Trash2 size={16}/></Button>}</div></div>;
