@@ -723,7 +723,7 @@ export function PartyList() {
     <Dialog open={birthdayPreview !== null} onOpenChange={open => { if (!open) setBirthdayPreview(null); }}>
       <DialogContent className="birthday-preview-dialog">
         <DialogHeader><DialogTitle>{birthdayPreview?.name ?? "Foto do aniversariante"}</DialogTitle><DialogDescription>Foto ampliada</DialogDescription></DialogHeader>
-        {birthdayPreview && <img className="birthday-preview-image" src={birthdayPreview.src} alt={birthdayPreview.name}/ >}
+        {birthdayPreview && <img className="birthday-preview-image" src={birthdayPreview.src} alt={birthdayPreview.name}/>}
       </DialogContent>
     </Dialog>
   </>;
