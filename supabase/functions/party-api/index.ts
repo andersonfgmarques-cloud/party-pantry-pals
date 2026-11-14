@@ -168,7 +168,7 @@ Deno.serve(async (req) => {
       return json(data);
     }
     if (action === "push_config") return json({ publicKey: VAPID_PUBLIC_KEY });
-    if (action === "push_subscribe" || action === "push_unsubscribe" || action === "push_status" || action === "notifications" || action === "notification_read") {
+    if (action === "push_subscribe" || action === "push_unsubscribe" || action === "push_status" || action === "notifications" || action === "notification_read" || action === "notification_read_all") {
       if (!uuid(body.token)) return json({ error: "Identificação do participante inválida." }, 401);
       const owner = await participantByToken(db, body.token);
       if (!owner) return json({ error: "Participante não encontrado." }, 401);
@@ -209,6 +209,11 @@ Deno.serve(async (req) => {
         const { data, error } = await db.from("party_notifications").select("id,title,body,kind,created_at,read_at").eq("participant_id", owner.id).order("created_at", { ascending: false }).limit(30);
         if (error) throw error;
         return json({ notifications: data ?? [] });
+      }
+      if (action === "notification_read_all") {
+        const { error } = await db.from("party_notifications").update({ read_at: new Date().toISOString() }).eq("participant_id", owner.id).is("read_at", null);
+        if (error) throw error;
+        return json({ ok: true });
       }
       if (!uuid(body.id)) return json({ error: "Notificação inválida." }, 400);
       const { error } = await db.from("party_notifications").update({ read_at: new Date().toISOString() }).eq("id", body.id).eq("participant_id", owner.id);
