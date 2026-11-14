@@ -485,11 +485,8 @@ export function PartyList() {
   }
   function reportLines(kind: StatsKind) {
     if (kind === 'people') return participants.map(p => {
-      const entries = data.reservations.filter(r => r.participant_id === p.id);
-      return [`Participante: ${p.name}`, ...(entries.length ? entries.map(r => {
-        const product = data.products.find(x => x.id === r.product_id);
-        return `  • ${product?.name ?? 'Produto'} — ${number(Number(r.quantity))} ${product?.unit ?? ''} (${r.source === 'home' ? 'Já tem em casa' : 'Vai comprar'})`;
-      }) : ['  Sem contribuições registradas']), ''];
+      const itemCount = data.reservations.filter(r => r.participant_id === p.id).length;
+      return [`Participante: ${p.name}`, `Quantidade de itens: ${itemCount}`, ''];
     }).flat();
     const products = data.products.filter(p => kind === 'items' || (kind === 'assumed'
       ? reservedFor(p.id, data.reservations) > 0 || p.received
@@ -709,7 +706,7 @@ export function PartyList() {
     {modal === 'stats' && <div className="space-y-3"><div className="flex flex-wrap justify-end gap-2">{statsKind === 'available' && <Button size="sm" onClick={shareAvailableList}><MessageCircle size={15}/> Compartilhar lista</Button>}<Button size="sm" variant="outline" onClick={() => exportStatsPdf()}><Download size={15}/> Exportar PDF</Button></div><div className="participant-report-scroll max-h-[220px] overflow-y-scroll space-y-2 pr-1">
       {statsKind === 'people' && (!password && !person?.token ? <div className="rounded-lg border border-border bg-muted/40 p-4 text-center"><strong>{data.participantCount} participantes cadastrados</strong><p className="help-text mt-1">Entre com seu cadastro para visualizar a relação nominal dos participantes.</p></div> : participants.length ? participants.map(p => {
         const entries = data.reservations.filter(r => r.participant_id === p.id);
-        return <div className="stats-list-row" key={p.id}><div className="min-w-0"><strong>{p.name}</strong><p>{entries.length ? entries.map(r => { const product = data.products.find(x => x.id === r.product_id); return `${product?.name ?? 'Produto'} · ${number(Number(r.quantity))} ${product?.unit ?? ''}`; }).join(' | ') : 'Ainda não assumiu nenhum produto'}</p></div><div className="flex items-center gap-1"><span className="stats-list-count">{entries.length} {entries.length === 1 ? 'item' : 'itens'}</span>{password && <Button size="icon" variant="ghost" title={`Excluir ${p.name}`} aria-label={`Excluir ${p.name}`} disabled={busy} onClick={() => deleteParticipant(p)}><Trash2 size={16}/></Button>}</div></div>;
+        return <div className="stats-list-row" key={p.id}><div className="min-w-0"><strong>{p.name}</strong></div><div className="flex items-center gap-1"><span className="stats-list-count">{entries.length} {entries.length === 1 ? 'item' : 'itens'}</span>{password && <Button size="icon" variant="ghost" title={`Excluir ${p.name}`} aria-label={`Excluir participante ${p.name}`} disabled={busy} onClick={() => deleteParticipant(p)}><Trash2 size={16}/></Button>}</div></div>;
       }) : <p className="help-text py-6 text-center">Ainda não há participantes cadastrados.</p>)}
       {statsKind !== 'people' && (data.products.filter(p => statsKind === 'items' || (statsKind === 'assumed' ? reservedFor(p.id, data.reservations) > 0 || p.received : !p.received && itemStatus(p, reservedFor(p.id, data.reservations)) !== 'complete')).length ? data.products.filter(p => statsKind === 'items' || (statsKind === 'assumed' ? reservedFor(p.id, data.reservations) > 0 || p.received : !p.received && itemStatus(p, reservedFor(p.id, data.reservations)) !== 'complete')).map(p => {
         const taken = reservedFor(p.id, data.reservations);
