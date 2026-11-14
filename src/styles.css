@@ -768,3 +768,14 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media (max-width: 700px) {
   .required-item-alert { min-height: 40px; font-size: 12px; }
 }
+
+/* Ampliação discreta das fotos do álbum de aniversariantes */
+.birthday-photo-button { position: relative; display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: zoom-in; }
+.birthday-photo-button > img { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; background: var(--muted); transition: filter .18s ease; }
+.birthday-photo-button:hover > img, .birthday-photo-button:focus-visible > img { filter: brightness(.92); }
+.birthday-photo-button:focus-visible { outline: 2px solid var(--primary); outline-offset: -3px; }
+.birthday-photo-hint { position: absolute; right: 8px; bottom: 8px; padding: 4px 8px; border-radius: 999px; background: rgb(0 0 0 / 58%); color: white; font-size: 11px; opacity: 0; transition: opacity .18s ease; }
+.birthday-photo-button:hover .birthday-photo-hint, .birthday-photo-button:focus-visible .birthday-photo-hint { opacity: 1; }
+.birthday-photo-dialog { width: min(92vw, 860px); }
+.birthday-photo-expanded { display: block; width: auto; max-width: 100%; max-height: 72vh; margin: 0 auto; object-fit: contain; border-radius: 10px; }
+@media (prefers-reduced-motion: reduce) { .birthday-photo-button > img, .birthday-photo-hint { transition: none; } }
