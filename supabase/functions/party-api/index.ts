@@ -84,9 +84,14 @@ Deno.serve(async (req) => {
     const action = body?.action;
 
     if (action === "public_event") {
-      const { data, error } = await db.from("party_event").select("id,name,party_date,party_end_date,party_dates,guests").eq("id", 1).single();
+      const [{ data, error }, { count, error: countError }] = await Promise.all([
+        db.from("party_event").select("id,name,party_date,party_end_date,party_dates,guests").eq("id", 1).single(),
+        // Expose only an aggregate count, never participant names or identifiers.
+        db.from("party_participants").select("id", { count: "exact", head: true }),
+      ]);
       if (error) throw error;
-      return json({ event: data });
+      if (countError) throw countError;
+      return json({ event: data, participantCount: count ?? 0 });
     }
 
     if (action === "event_location" && uuid(body.token)) {
