@@ -128,29 +128,57 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
     if (action === "pin_login") {
-      const name = typeof body.name === "string" ? body.name.trim().replace(/\s+/g, " ") : "";
-      if (name.length < 2 || name.length > 60 || typeof body.pin !== "string" || !/^\d{6}$/.test(body.pin)) return json({ error: "Informe seu nome e o PIN de 6 números." }, 400);
-      const normalizedName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+      const name = typeof body.name === "string" ? body.name.trim().replace(/\\s+/g, " ") : "";
+      if (name.length < 2 || name.length > 60 || typeof body.pin !== "string" || !/^\\d{6}$/.test(body.pin)) return json({ error: "Informe seu nome e o PIN de 6 números." }, 400);
+      // Throttle by IP and by participant+IP. A name-only lockout would let
+      // anyone who knows a participant's name deny that participant access.
+      const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+      const clientIp = req.headers.get("cf-connecting-ip")?.trim()
+        || req.headers.get("x-real-ip")?.trim()
+        || forwardedFor;
+      if (!clientIp) return json({ error: "Não foi possível validar a origem da conexão. Tente novamente." }, 503);
+      const normalizedName = name.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR");
       const nameHash = await sha256(normalizedName);
-      const { data: attempt, error: attemptError } = await db.from("party_pin_login_attempts").select("*").eq("name_hash", nameHash).maybeSingle();
-      if (attemptError) throw attemptError;
-      const now = Date.now();
-      if (attempt?.locked_until && new Date(attempt.locked_until).getTime() > now) return json({ error: "Muitas tentativas. Aguarde 15 minutos e tente novamente." }, 429);
+      const ipHash = await sha256(`party-pin-login-ip:${clientIp}`);
+      const pairHash = await sha256(`party-pin-login-pair:${nameHash}:${ipHash}`);
+      const checkLimit = async (scopeHash: string, maxAttempts: number) => {
+        const { data, error } = await db.rpc("party_pin_login_rate_limit", {
+          p_scope_hash: scopeHash, p_action: "check", p_max_attempts: maxAttempts,
+        });
+        if (error) throw error;
+        return Array.isArray(data) ? data[0] : data;
+      };
+      const ipCheck = await checkLimit(ipHash, 20);
+      if (ipCheck?.is_locked) return json({ error: "Muitas tentativas deste dispositivo/rede. Aguarde 15 minutos e tente novamente.", retryAfter: ipCheck.retry_after_seconds }, 429);
+      const pairCheck = await checkLimit(pairHash, 5);
+      if (pairCheck?.is_locked) return json({ error: "Muitas tentativas para este participante neste dispositivo/rede. Aguarde 15 minutos e tente novamente.", retryAfter: pairCheck.retry_after_seconds }, 429);
+
       const { data: candidates, error: lookupError } = await db.from("party_participants").select("id,name,pin_hash,pin_salt").not("pin_hash", "is", null);
       if (lookupError) throw lookupError;
-      const matchingNames = (candidates ?? []).filter(candidate => candidate.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR") === normalizedName);
+      const matchingNames = (candidates ?? []).filter(candidate => candidate.name.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("pt-BR") === normalizedName);
       const matches = [];
       for (const candidate of matchingNames) {
         if (candidate.pin_hash && candidate.pin_salt && safeEqual(await hashPin(body.pin, candidate.pin_salt), candidate.pin_hash)) matches.push(candidate);
       }
       if (matches.length !== 1) {
-        const windowExpired = !attempt || now - new Date(attempt.window_started_at).getTime() > 15 * 60 * 1000;
-        const attempts = windowExpired ? 1 : Number(attempt.attempts) + 1;
-        const { error: attemptSaveError } = await db.from("party_pin_login_attempts").upsert({ name_hash: nameHash, attempts, window_started_at: windowExpired ? new Date().toISOString() : attempt.window_started_at, locked_until: attempts >= 5 ? new Date(now + 15 * 60 * 1000).toISOString() : null });
-        if (attemptSaveError) throw attemptSaveError;
+        const incrementLimit = async (scopeHash: string, maxAttempts: number) => {
+          const { data, error } = await db.rpc("party_pin_login_rate_limit", {
+            p_scope_hash: scopeHash, p_action: "fail", p_max_attempts: maxAttempts,
+          });
+          if (error) throw error;
+          return Array.isArray(data) ? data[0] : data;
+        };
+        const ipAttempt = await incrementLimit(ipHash, 20);
+        const pairAttempt = await incrementLimit(pairHash, 5);
+        if (ipAttempt?.is_locked || pairAttempt?.is_locked) {
+          const retryAfter = Math.max(Number(ipAttempt?.retry_after_seconds ?? 0), Number(pairAttempt?.retry_after_seconds ?? 0));
+          return json({ error: "Limite de tentativas atingido. Aguarde 15 minutos antes de tentar novamente.", retryAfter }, 429);
+        }
         return json({ error: "Nome ou PIN incorreto. Confira os dados e tente novamente." }, 401);
       }
-      const { error: clearAttemptError } = await db.from("party_pin_login_attempts").delete().eq("name_hash", nameHash);
+      const { error: clearAttemptError } = await db.rpc("party_pin_login_rate_limit", {
+        p_scope_hash: pairHash, p_action: "reset", p_max_attempts: 5,
+      });
       if (clearAttemptError) throw clearAttemptError;
       const token = crypto.randomUUID();
       const { error: tokenError } = await db.from("party_participant_sessions").insert({ participant_id: matches[0].id, token_hash: await sha256(token) });
