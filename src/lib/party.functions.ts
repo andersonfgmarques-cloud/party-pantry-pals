@@ -8,7 +8,7 @@ const mutation = z.object({
   token: z.string().uuid().optional(),
   password: z.string().max(200).optional(),
   pin: z.string().optional(),
-  action: z.enum(['participant_directory','participant_rename','pin_set','pin_login','participant_logout','add','reserve','cancel','edit','delete','received','event','verify','participants','reservation_status','adjust_reservation','push_config','push_subscribe','push_unsubscribe','push_status','notifications','notification_read','audit_history','expenses','expense_add','expense_delete','birthday_add','birthday_edit','birthday_delete','birthday_photos','participant_delete']),
+  action: z.enum(['participant_directory','participant_rename','pin_set','pin_login','participant_logout','add','reserve','cancel','edit','delete','received','event','verify','participants','reservation_status','adjust_reservation','push_config','push_subscribe','push_unsubscribe','push_status','notifications','notification_read','audit_history','expenses','expense_add','expense_delete','birthday_add','birthday_edit','birthday_delete','birthday_photos','participant_delete','contribution_overview','family_assign','product_reference_price']),
   id: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(100).optional(),
   categoryId: z.number().int().min(1).max(6).optional(),
@@ -29,7 +29,7 @@ const mutation = z.object({
   paidBy: z.string().trim().min(2).max(60).optional(),
   subscription: z.record(z.string(), z.unknown()).optional(),
   endpoint: z.string().url().optional(),
-  photoData: z.string().max(4200000).optional(),
+  photoData: z.string().max(4200000).optional(),\n  familyId: z.number().int().min(1).max(6).nullable().optional(),\n  referencePrice: z.number().min(0).nullable().optional(),\n  referenceSource: z.enum(['Assaí','Higa','Max Atacadista','Preço informado','Estimativa']).optional(),
 });
 type Mutation = z.infer<typeof mutation>;
 type Participant = { id: string; name: string; created_at: string | null };
@@ -130,4 +130,14 @@ export async function getPartyExpenses(password: string): Promise<Expense[]> {
 export async function getPartyBirthdayPhotos(token?: string, password?: string): Promise<Record<string, string>> {
   const result = await invokePartyApi<{ photos: { photo_path: string; signed_url: string }[] }>({ action: 'birthday_photos', ...(token ? { token } : {}), ...(password ? { password } : {}) });
   return Object.fromEntries((result.photos ?? []).map(photo => [photo.photo_path, photo.signed_url]));
+}
+
+export type ContributionOverview = {
+  families: { id: number; name: string; target_amount: number }[];
+  participants: { id: string; name: string; family_id: number | null; created_at: string | null }[];
+  products: { id: string; name: string; unit: string; reference_price: number | null; reference_source: string | null; reference_updated_at: string | null }[];
+  reservations: { id: string; product_id: string; participant_id: string; participant_name: string; quantity: number; source: string; status: string | null }[];
+};
+export async function getContributionOverview(password: string): Promise<ContributionOverview> {
+  return invokePartyApi<ContributionOverview>({ action: 'contribution_overview', password });
 }
