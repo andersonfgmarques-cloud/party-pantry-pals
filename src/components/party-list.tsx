@@ -219,8 +219,22 @@ export function PartyList() {
 
   async function openNotifications() {
     if (!person) { setPendingModal('notifications'); setModal('identity'); return; }
-    try { setNotifications((await getPartyNotifications(person.token)).filter(item => !item.read_at)); setModal('notifications'); }
-    catch { toast.error('Não foi possível carregar as notificações.'); }
+    // Opening the bell marks every notification for this participant as read.
+    // Clear the list and badge immediately; restore unread items if the server rejects it.
+    const previous = notifications;
+    setNotifications([]);
+    setModal('notifications');
+    try {
+      await markAllPartyNotificationsRead(person.token);
+    } catch {
+      try {
+        const latest = await getPartyNotifications(person.token);
+        setNotifications(latest.filter(item => !item.read_at));
+      } catch {
+        setNotifications(previous);
+      }
+      toast.error('Não foi possível marcar as notificações como lidas. Tente novamente.');
+    }
   }
   async function enablePushNotifications() {
     if (!person) { toast.info('Informe seu nome antes de ativar as notificações.'); setPendingModal('notifications'); setModal('identity'); return; }
