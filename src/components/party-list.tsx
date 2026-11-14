@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { partyQuery } from '@/lib/party.queries';
-import { identifyParticipant, changeParty, loginParticipant, logoutParticipant, setParticipantPin, getPartyNotifications, markPartyNotificationRead, savePushSubscription, getPushPublicKey, getPartyExpenses, getPartyBirthdayPhotos, renameParticipant, getPushStatus, getPartyLocation, type PartyNotification } from '@/lib/party.functions';
+import { identifyParticipant, changeParty, loginParticipant, logoutParticipant, setParticipantPin, getPartyNotifications, markPartyNotificationRead, markAllPartyNotificationsRead, savePushSubscription, getPushPublicKey, getPartyExpenses, getPartyBirthdayPhotos, renameParticipant, getPushStatus, getPartyLocation, type PartyNotification } from '@/lib/party.functions';
 import { reservedFor, itemStatus, remainingFor, number, statusLabels, type Product, type Expense } from '@/lib/party';
 import garden from '@/assets/chacara-garden.jpg';
 
