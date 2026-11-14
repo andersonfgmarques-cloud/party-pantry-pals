@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { canReserve, canCancel, itemStatus, normalizeName, remainingFor, type Product } from '@/lib/party';
-const burger: Product = { id: 'burger', name: 'Hambúrguer', category_id: 2, quantity: 4.5, unit: 'kg', note: null, received: false, created_at: '' };
+const burger: Product = { id: 'burger', name: 'Hambúrguer', category_id: 2, quantity: 4.5, unit: 'kg', note: null, received: false, reference_price: null, reference_source: null, reference_updated_at: null, created_at: '' };
 describe('Regras da festa', () => {
   it('permite contribuição parcial de 2 kg em 4,5 kg', () => expect(canReserve(4.5, 0, 2)).toBe(true));
   it('completa hambúrguer com 2 kg + 2,5 kg', () => expect(itemStatus(burger, 2 + 2.5)).toBe('complete'));
