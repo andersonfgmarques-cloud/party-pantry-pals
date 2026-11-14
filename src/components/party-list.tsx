@@ -639,6 +639,148 @@ export function PartyList() {
     await exportChecklistPdf(`Lista individual: ${p.name}`, rows, `contribuicoes-${p.name.trim().toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, '-')}.pdf`);
   }
   async function exportPdf() { await exportReportPdf('Lista completa da festa', summary().split('\\n'), 'festou.pdf'); }
+  function dashboardReportText() {
+    const groups = [
+      { title: 'Ainda sem responsável', items: unassignedItems },
+      { title: 'Parcialmente reservados', items: partialItems },
+      { title: 'Quantidade garantida', items: guaranteedItems },
+      { title: 'Já recebidos', items: receivedItems },
+      { title: 'Quantidade a definir', items: undefinedQuantityItems },
+    ];
+    return [
+      `🌿 Festou! — Painel de pendências e contribuições`,
+      data.event.name,
+      dateLabel,
+      '',
+      `Sem responsável: ${unassignedItems.length}`,
+      `Parcialmente reservados: ${partialItems.length}`,
+      `Quantidade garantida: ${guaranteedItems.length}`,
+      `Já recebidos: ${receivedItems.length}`,
+      `Quantidade a definir: ${undefinedQuantityItems.length}`,
+      '',
+      ...groups.flatMap(group => [
+        group.title.toUpperCase(),
+        ...(group.items.length ? group.items.map(({ product, reserved, remaining, reservations }) =>
+          `• ${product.name} — ${product.quantity === null ? `${number(reserved)} ${product.unit} reservados · total a definir` : product.received ? 'Recebido' : remaining === 0 ? 'Quantidade completa' : `Faltam ${number(remaining ?? 0)} ${product.unit}`}${reservations.length ? ` | ${reservations.map(r => `${r.participant_name}: ${number(Number(r.quantity))} ${product.unit}`).join(', ')}` : ' | Ninguém assumiu este item'}`) : ['Nenhum item nesta situação.']),
+        '',
+      ]),
+      `Acompanhe e participe: ${appUrl()}`,
+    ].join('\n');
+  }
+  function shareDashboard() {
+    const message = dashboardReportText();
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+  }
+  async function exportDashboardPdf() {
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      const width = doc.internal.pageSize.getWidth();
+      const height = doc.internal.pageSize.getHeight();
+      const margin = 14;
+      const groups = [
+        { title: 'Ainda sem responsável', items: unassignedItems },
+        { title: 'Parcialmente reservados', items: partialItems },
+        { title: 'Quantidade garantida', items: guaranteedItems },
+        { title: 'Já recebidos', items: receivedItems },
+        { title: 'Quantidade a definir', items: undefinedQuantityItems },
+      ];
+      let y = 16;
+      const ensureSpace = (needed: number) => {
+        if (y + needed > height - 16) { doc.addPage(); y = 16; }
+      };
+      doc.setTextColor(25, 55, 40);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(19);
+      doc.text('Festou!', margin, y);
+      y += 9;
+      doc.setFontSize(15);
+      doc.text('Painel de pendências e contribuições', margin, y, { maxWidth: width - margin * 2 });
+      y += 7;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(90, 105, 96);
+      doc.text(data.event.name, margin, y); y += 5;
+      doc.text(dateLabel, margin, y); y += 5;
+      doc.text(`Emitido em ${new Date().toLocaleString('pt-BR')}`, margin, y); y += 8;
+      const summary = [
+        ['Sem responsável', unassignedItems.length],
+        ['Parcialmente reservados', partialItems.length],
+        ['Quantidade garantida', guaranteedItems.length],
+        ['Já recebidos', receivedItems.length],
+        ['Quantidade a definir', undefinedQuantityItems.length],
+      ];
+      const boxGap = 3;
+      const boxWidth = (width - margin * 2 - boxGap * 2) / 3;
+      summary.forEach(([label, count], i) => {
+        const row = Math.floor(i / 3);
+        const col = i % 3;
+        const x = margin + col * (boxWidth + boxGap);
+        const boxY = y + row * 17;
+        doc.setDrawColor(215, 224, 218);
+        doc.setFillColor(248, 250, 248);
+        doc.roundedRect(x, boxY, boxWidth, 14, 2, 2, 'FD');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(90, 105, 96);
+        doc.text(String(label), x + 3, boxY + 5);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(25, 55, 40);
+        doc.text(String(count), x + 3, boxY + 11);
+      });
+      y += 38;
+      for (const group of groups) {
+        ensureSpace(15);
+        doc.setFillColor(238, 244, 239);
+        doc.roundedRect(margin, y, width - margin * 2, 8, 1.5, 1.5, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(25, 55, 40);
+        doc.text(`${group.title} (${group.items.length})`, margin + 3, y + 5.5);
+        y += 11;
+        if (!group.items.length) {
+          ensureSpace(8);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8);
+          doc.setTextColor(100);
+          doc.text('Nenhum item nesta situação.', margin + 2, y);
+          y += 6;
+          continue;
+        }
+        for (const { product, reserved, remaining, reservations } of group.items) {
+          const detail = product.quantity === null
+            ? `${number(reserved)} ${product.unit} reservados · total a definir`
+            : product.received ? 'Recebido'
+            : remaining === 0 ? 'Quantidade completa'
+            : `Faltam ${number(remaining ?? 0)} ${product.unit}`;
+          const lines = doc.splitTextToSize(`${product.name} — ${detail}${reservations.length ? ` | ${reservations.map(r => `${r.participant_name}: ${number(Number(r.quantity))} ${product.unit}`).join(', ')}` : ' | Ninguém assumiu este item'}`, width - margin * 2 - 8);
+          const itemHeight = Math.max(7, lines.length * 4 + 3);
+          ensureSpace(itemHeight);
+          doc.setDrawColor(225, 230, 226);
+          doc.line(margin, y, width - margin, y);
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8.5);
+          doc.setTextColor(35, 50, 40);
+          doc.text(lines, margin + 2, y + 4);
+          y += itemHeight;
+        }
+        y += 4;
+      }
+      const pages = doc.getNumberOfPages();
+      for (let current = 1; current <= pages; current++) {
+        doc.setPage(current);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(120);
+        doc.text(`Festou! · Página ${current} de ${pages}`, width / 2, height - 8, { align: 'center' });
+      }
+      doc.save('festou-painel-de-pendencias.pdf');
+      toast.success('PDF do painel gerado com sucesso!');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível gerar o PDF do painel.');
+    }
+  }
   async function showHistory() { setBusy(true); try { const result = await mutate({ data: { action: 'audit_history', password } }); setHistory((result as unknown as { history: typeof history }).history ?? []); setModal('history'); } catch(e) { toast.error(e instanceof Error ? e.message : 'Erro ao carregar histórico.'); } finally { setBusy(false); } }
   async function showParticipants() { setBusy(true); try { const result = await mutate({ data: { action: 'participants', password } }); setParticipants(result.participants); setModal('participants'); } catch(e) { toast.error(e instanceof Error ? e.message : 'Erro ao carregar participantes.'); } finally { setBusy(false); } }
   async function openStats(kind: StatsKind) {
@@ -810,6 +952,7 @@ export function PartyList() {
     {modal === 'finance' && <div className="space-y-4"><div className="rounded-lg bg-secondary p-4"><p className="text-xs text-muted-foreground">Total registrado</p><strong className="text-2xl">R$ {number(expenses.reduce((sum, expense) => sum + Number(expense.amount), 0))}</strong></div><form className="modal-form" onSubmit={addExpense}><label>Descrição<input name="description" required maxLength={120} placeholder="Ex.: compra de bebidas"/></label><label>Valor (R$)<input name="amount" type="number" min="0.01" step="0.01" required/></label><label>Quem pagou<input name="paidBy" required maxLength={60} placeholder="Nome do responsável"/></label><Button type="submit" disabled={busy}>Registrar despesa</Button></form><div className="max-h-56 overflow-y-auto">{expenses.map(expense => <div className="reservation-row" key={expense.id}><div><strong>{expense.description}</strong><p className="help-text">Pago por {expense.paid_by}</p></div><div className="text-right"><strong>R$ {number(Number(expense.amount))}</strong><Button size="sm" variant="ghost" onClick={async () => { if (await act({ action: 'expense_delete', id: expense.id }, 'Despesa removida.')) { try { setExpenses(await getPartyExpenses(password)); } catch { toast.error('Não foi possível atualizar a lista de despesas.'); } } }}>Excluir</Button></div></div>)}{!expenses.length && <p className="help-text py-4">Nenhuma despesa registrada.</p>}</div></div>}
     {modal === 'participants' && <div className="participant-list-scroll max-h-[220px] overflow-y-scroll">{participants.map(p => <div className="reservation-row" key={p.id}><span>{p.name}</span><div className="flex items-center gap-2"><span className="text-muted-foreground text-xs">{data.reservations.filter(r => r.participant_id === p.id).length} contribuições</span><Button size="icon" variant="ghost" title={`Excluir ${p.name}`} aria-label={`Excluir participante ${p.name}`} disabled={busy} onClick={() => deleteParticipant(p)}><Trash2 size={16}/></Button></div></div>)}{!participants.length && <p className="help-text py-6">Ainda não há participantes.</p>}</div>}
     {modal === 'dashboard' && <div className="max-h-[65vh] space-y-4 overflow-y-auto pr-1">
+      <div className="flex flex-wrap justify-end gap-2"><Button size="sm" variant="outline" onClick={exportDashboardPdf}><Download size={15}/> Exportar PDF</Button><Button size="sm" onClick={shareDashboard}><MessageCircle size={15}/> Compartilhar</Button></div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {[{id:'unassigned',label:'Sem responsável',count:unassignedItems.length,icon:Users},{id:'partial',label:'Parcialmente reservados',count:partialItems.length,icon:Bell},{id:'guaranteed',label:'Quantidade garantida',count:guaranteedItems.length,icon:CheckCheck},{id:'received',label:'Já recebidos',count:receivedItems.length,icon:Package},{id:'undefined',label:'Quantidade a definir',count:undefinedQuantityItems.length,icon:ListChecks}].map(card => { const Icon = card.icon; const active = dashboardFilter === card.id; return <button type="button" key={card.id} aria-pressed={active} onClick={() => setDashboardFilter(active ? 'all' : card.id as typeof dashboardFilter)} className={`rounded-xl border p-3 text-left transition-colors ${active ? 'border-primary bg-primary/10 ring-1 ring-primary' : 'border-border bg-card hover:bg-accent'}`}><div className="flex items-center justify-between gap-2"><span className="text-xs text-muted-foreground">{card.label}</span><Icon size={16} className="text-muted-foreground"/></div><strong className="mt-1 block text-2xl">{card.count}</strong></button>; })}
       </div>
