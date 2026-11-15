@@ -388,6 +388,62 @@ export function PartyList() {
       toast.error(error instanceof Error ? error.message : 'Não foi possível carregar as contribuições.');
     } finally { setBusy(false); }
   }
+  async function exportContributionPdf() {
+    if (!contributionOverview) return;
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 14;
+      let y = 17;
+      const money = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const ensureSpace = (needed: number) => { if (y + needed > pageHeight - 16) { doc.addPage(); y = 17; } };
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(19); doc.setTextColor(25, 55, 40);
+      doc.text('Festou! · Projeto 555', margin, y); y += 8;
+      doc.setFontSize(13); doc.text('Equilíbrio das contribuições por família', margin, y); y += 7;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 110, 104);
+      doc.text('Meta de R$ 250,00 por família · Relatório emitido em ' + new Date().toLocaleString('pt-BR'), margin, y); y += 10;
+      const families = contributionOverview.families.map(family => {
+        const members = contributionOverview.participants.filter(p => p.family_id === family.id);
+        const reservations = contributionOverview.reservations.filter(r => members.some(p => p.id === r.participant_id));
+        const total = reservations.reduce((sum, reservation) => {
+          const product = contributionOverview.products.find(p => p.id === reservation.product_id);
+          return sum + (product?.reference_price == null ? 0 : Number(product.reference_price) * Number(reservation.quantity));
+        }, 0);
+        const withoutPrice = reservations.filter(r => contributionOverview.products.find(p => p.id === r.product_id)?.reference_price == null).length;
+        return { family, members, total, withoutPrice, remaining: Math.max(0, Number(family.target_amount) - total) };
+      });
+      const grandTotal = families.reduce((sum, item) => sum + item.total, 0);
+      doc.setFillColor(245, 248, 245); doc.roundedRect(margin, y, pageWidth - margin * 2, 20, 2, 2, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(25, 55, 40);
+      doc.text('Total contabilizado: ' + money(grandTotal), margin + 4, y + 8);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(90, 100, 94);
+      doc.text('Meta conjunta: ' + money(families.reduce((sum, item) => sum + Number(item.family.target_amount), 0)), margin + 4, y + 14);
+      y += 27;
+      families.forEach(({ family, members, total, withoutPrice, remaining }) => {
+        ensureSpace(27);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(25, 55, 40);
+        doc.text(family.name, margin, y + 4);
+        doc.text(money(total) + ' / ' + money(Number(family.target_amount)), pageWidth - margin, y + 4, { align: 'right' });
+        const barX = margin; const barY = y + 8; const barW = pageWidth - margin * 2; const pct = Math.min(1, total / Math.max(1, Number(family.target_amount)));
+        doc.setFillColor(235, 240, 236); doc.roundedRect(barX, barY, barW, 4, 1.5, 1.5, 'F');
+        if (pct > 0) { doc.setFillColor(22, 163, 74); doc.roundedRect(barX, barY, barW * pct, 4, 1.5, 1.5, 'F'); }
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(95, 105, 98);
+        doc.text((remaining > 0 ? 'Faltam ' + money(remaining) : 'Meta atingida') + (withoutPrice ? ' · ' + withoutPrice + ' reserva(s) sem preço' : ''), margin, y + 17, { maxWidth: barW });
+        const memberNames = members.length ? members.map(p => p.name).join(', ') : 'Nenhum participante associado';
+        doc.text(doc.splitTextToSize(memberNames, barW), margin, y + 22, { maxWidth: barW });
+        y += 29;
+      });
+      ensureSpace(14);
+      doc.setFontSize(8); doc.setTextColor(110, 110, 110);
+      doc.text('Reservas sem preço não entram no total contabilizado. Valores dependem dos preços de referência cadastrados.', margin, y, { maxWidth: pageWidth - margin * 2 });
+      doc.save('festou-projeto-555-equilibrio.pdf');
+      toast.success('PDF do equilíbrio das contribuições gerado!');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível gerar o PDF.');
+    }
+  }
   async function refreshContributionManager() {
     if (!password) return;
     setContributionOverview(await getContributionOverview(password));
@@ -969,6 +1025,7 @@ export function PartyList() {
     {modal === 'finance' && <div className="space-y-4"><div className="rounded-lg bg-secondary p-4"><p className="text-xs text-muted-foreground">Total registrado</p><strong className="text-2xl">R$ {number(expenses.reduce((sum, expense) => sum + Number(expense.amount), 0))}</strong></div><form className="modal-form" onSubmit={addExpense}><label>Descrição<input name="description" required maxLength={120} placeholder="Ex.: compra de bebidas"/></label><label>Valor (R$)<input name="amount" type="number" min="0.01" step="0.01" required/></label><label>Quem pagou<input name="paidBy" required maxLength={60} placeholder="Nome do responsável"/></label><Button type="submit" disabled={busy}>Registrar despesa</Button></form><div className="max-h-56 overflow-y-auto">{expenses.map(expense => <div className="reservation-row" key={expense.id}><div><strong>{expense.description}</strong><p className="help-text">Pago por {expense.paid_by}</p></div><div className="text-right"><strong>R$ {number(Number(expense.amount))}</strong><Button size="sm" variant="ghost" onClick={async () => { if (await act({ action: 'expense_delete', id: expense.id }, 'Despesa removida.')) { try { setExpenses(await getPartyExpenses(password)); } catch { toast.error('Não foi possível atualizar a lista de despesas.'); } } }}>Excluir</Button></div></div>)}{!expenses.length && <p className="help-text py-4">Nenhuma despesa registrada.</p>}</div></div>}
     {modal === 'participants' && <div className="participant-list-scroll max-h-[220px] overflow-y-scroll">{participants.map(p => <div className="reservation-row" key={p.id}><span>{p.name}</span><div className="flex items-center gap-2"><span className="text-muted-foreground text-xs">{data.reservations.filter(r => r.participant_id === p.id).length} contribuições</span><Button size="icon" variant="ghost" title={`Excluir ${p.name}`} aria-label={`Excluir participante ${p.name}`} disabled={busy} onClick={() => deleteParticipant(p)}><Trash2 size={16}/></Button></div></div>)}{!participants.length && <p className="help-text py-6">Ainda não há participantes.</p>}</div>}
     {modal === 'contributions' && contributionOverview && <div className="max-h-[70vh] space-y-5 overflow-y-auto pr-1">
+      <div className="flex justify-end"><Button size="sm" variant="outline" onClick={exportContributionPdf}><Download size={15}/> Exportar gráfico em PDF</Button></div>
       <div className="rounded-xl border border-border bg-muted/40 p-3">
         <div className="grid grid-cols-2 gap-3">
           <div><p className="text-xs text-muted-foreground">Meta por família</p><strong className="text-xl">R$ 250,00</strong></div>
