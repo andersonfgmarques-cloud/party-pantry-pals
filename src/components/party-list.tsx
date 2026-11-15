@@ -388,6 +388,62 @@ export function PartyList() {
       toast.error(error instanceof Error ? error.message : 'Não foi possível carregar as contribuições.');
     } finally { setBusy(false); }
   }
+  async function exportContributionPdf() {
+    if (!contributionOverview) return;
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 14;
+      let y = 17;
+      const money = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const ensureSpace = (needed: number) => { if (y + needed > pageHeight - 16) { doc.addPage(); y = 17; } };
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(19); doc.setTextColor(25, 55, 40);
+      doc.text('Festou! · Projeto 555', margin, y); y += 8;
+      doc.setFontSize(13); doc.text('Equilíbrio das contribuições por família', margin, y); y += 7;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(100, 110, 104);
+      doc.text('Meta de R$ 250,00 por família · Relatório emitido em ' + new Date().toLocaleString('pt-BR'), margin, y); y += 10;
+      const families = contributionOverview.families.map(family => {
+        const members = contributionOverview.participants.filter(p => p.family_id === family.id);
+        const reservations = contributionOverview.reservations.filter(r => members.some(p => p.id === r.participant_id));
+        const total = reservations.reduce((sum, reservation) => {
+          const product = contributionOverview.products.find(p => p.id === reservation.product_id);
+          return sum + (product?.reference_price == null ? 0 : Number(product.reference_price) * Number(reservation.quantity));
+        }, 0);
+        const withoutPrice = reservations.filter(r => contributionOverview.products.find(p => p.id === r.product_id)?.reference_price == null).length;
+        return { family, members, total, withoutPrice, remaining: Math.max(0, Number(family.target_amount) - total) };
+      });
+      const grandTotal = families.reduce((sum, item) => sum + item.total, 0);
+      doc.setFillColor(245, 248, 245); doc.roundedRect(margin, y, pageWidth - margin * 2, 20, 2, 2, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(25, 55, 40);
+      doc.text('Total contabilizado: ' + money(grandTotal), margin + 4, y + 8);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(90, 100, 94);
+      doc.text('Meta conjunta: ' + money(families.reduce((sum, item) => sum + Number(item.family.target_amount), 0)), margin + 4, y + 14);
+      y += 27;
+      families.forEach(({ family, members, total, withoutPrice, remaining }) => {
+        ensureSpace(27);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(25, 55, 40);
+        doc.text(family.name, margin, y + 4);
+        doc.text(money(total) + ' / ' + money(Number(family.target_amount)), pageWidth - margin, y + 4, { align: 'right' });
+        const barX = margin; const barY = y + 8; const barW = pageWidth - margin * 2; const pct = Math.min(1, total / Math.max(1, Number(family.target_amount)));
+        doc.setFillColor(235, 240, 236); doc.roundedRect(barX, barY, barW, 4, 1.5, 1.5, 'F');
+        if (pct > 0) { doc.setFillColor(22, 163, 74); doc.roundedRect(barX, barY, barW * pct, 4, 1.5, 1.5, 'F'); }
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(95, 105, 98);
+        doc.text((remaining > 0 ? 'Faltam ' + money(remaining) : 'Meta atingida') + (withoutPrice ? ' · ' + withoutPrice + ' reserva(s) sem preço' : ''), margin, y + 17, { maxWidth: barW });
+        const memberNames = members.length ? members.map(p => p.name).join(', ') : 'Nenhum participante associado';
+        doc.text(doc.splitTextToSize(memberNames, barW), margin, y + 22, { maxWidth: barW });
+        y += 29;
+      });
+      ensureSpace(14);
+      doc.setFontSize(8); doc.setTextColor(110, 110, 110);
+      doc.text('Reservas sem preço não entram no total contabilizado. Valores dependem dos preços de referência cadastrados.', margin, y, { maxWidth: pageWidth - margin * 2 });
+      doc.save('festou-projeto-555-equilibrio.pdf');
+      toast.success('PDF do equilíbrio das contribuições gerado!');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível gerar o PDF.');
+    }
+  }
   async function refreshContributionManager() {
     if (!password) return;
     setContributionOverview(await getContributionOverview(password));
