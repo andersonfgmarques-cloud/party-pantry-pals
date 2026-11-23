@@ -2,7 +2,7 @@ name: Deploy production unchanged + Festou preview
 
 on:
   push:
-    branches: ["main", "feat/festou-multi-event-foundation"]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -40,10 +40,21 @@ jobs:
         with:
           ref: feat/festou-multi-event-foundation
           path: preview-source
-      - name: Add isolated preview under /preview/
+      - name: Install preview dependencies
+        working-directory: preview-source
+        run: bun install --frozen-lockfile
+      - name: Build isolated EventManager preview without Supabase secrets
+        working-directory: preview-source
+        run: bun run build
+        env:
+          GITHUB_ACTIONS: "true"
+          VITE_FESTOU_PREVIEW: "true"
+          VITE_ASSET_BASE: "/party-pantry-pals/preview/"
+          VITE_ROUTER_BASEPATH: "/party-pantry-pals/preview"
+      - name: Add isolated preview bundle under /preview/
         run: |
           mkdir -p production/dist/preview
-          cp preview-source/public/preview/index.html production/dist/preview/index.html
+          cp -R preview-source/dist/. production/dist/preview/
           touch production/dist/.nojekyll
       - name: Configure Pages
         uses: actions/configure-pages@v5
