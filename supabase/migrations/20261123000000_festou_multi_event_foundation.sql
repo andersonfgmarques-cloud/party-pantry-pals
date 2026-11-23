@@ -169,3 +169,49 @@ $$;
 
 revoke all on function public.party_event_add_refund(uuid, uuid, numeric, text) from public, anon, authenticated;
 grant execute on function public.party_event_add_refund(uuid, uuid, numeric, text) to service_role;
+
+-- Replace an event's pricing rules atomically; failed inserts leave prior rules intact.
+create or replace function public.party_event_replace_pricing_rules(
+  p_event_id uuid,
+  p_rules jsonb
+)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if p_rules is null or jsonb_typeof(p_rules) <> 'array' or jsonb_array_length(p_rules) > 40 then
+    raise exception 'Regras de cobrança inválidas.';
+  end if;
+
+  delete from public.party_event_pricing_rules where event_id = p_event_id;
+
+  insert into public.party_event_pricing_rules(
+    event_id, attendee_type, label, age_min, age_max, charge_mode, amount, active, sort_order
+  )
+  select
+    p_event_id,
+    x.attendee_type,
+    x.label,
+    x.age_min,
+    x.age_max,
+    x.charge_mode,
+    coalesce(x.amount, 0),
+    coalesce(x.active, true),
+    coalesce(x.sort_order, 0)
+  from jsonb_to_recordset(p_rules) as x(
+    "attendeeType" text,
+    label text,
+    "ageMin" integer,
+    "ageMax" integer,
+    "chargeMode" text,
+    amount numeric,
+    active boolean,
+    "sortOrder" integer
+  );
+end;
+$$;
+
+revoke all on function public.party_event_replace_pricing_rules(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.party_event_replace_pricing_rules(uuid, jsonb) to service_role;
