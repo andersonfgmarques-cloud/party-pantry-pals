@@ -13,7 +13,7 @@ const seed=():Db=>{
  "demo-event-1:event_budget":[{id:"budget-1",category:"venue",description:"Locação da chácara",planned_amount:1500,actual_amount:1500},{id:"budget-2",category:"food",description:"Alimentação",planned_amount:900,actual_amount:420}],
  "demo-event-1:event_payments":[{id:"payment-1",payer_name:"Anderson Marques",attendee_id:"att-1",amount:200,method:"pix",status:"confirmed",receipt_path:null}],
  "demo-event-1:event_expenses":[{id:"expense-1",description:"Sinal da chácara",amount:1500,paid_by:"Anderson Marques",receipt_path:null}]
- ,refunds:[]};
+ },refunds:[]};
 };
 function read():Db{try{const v=localStorage.getItem(KEY);return v?JSON.parse(v) as Db:seed()}catch{return seed()}}
 function write(db:Db){localStorage.setItem(KEY,JSON.stringify(db))}
