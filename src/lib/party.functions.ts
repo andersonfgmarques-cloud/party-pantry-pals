@@ -144,3 +144,40 @@ export type ContributionOverview = {
 export async function getContributionOverview(password: string): Promise<ContributionOverview> {
   return invokePartyApi<ContributionOverview>({ action: 'contribution_overview', password });
 }
+
+export type ManagedEvent = { id:string; legacy_event_id:number|null; name:string; description:string|null; starts_at:string|null; ends_at:string|null; location:string|null; status:"planning"|"active"|"completed"|"cancelled"; currency:string; contingency_percent:number; created_at:string; updated_at:string };
+export type EventPricingRule = { id?:string; attendeeType:"couple"|"individual"|"child"|"extra_guest"; label:string; ageMin?:number|null; ageMax?:number|null; chargeMode:"free"|"half"|"fixed"|"standard"; amount:number; active?:boolean; sortOrder?:number };
+export type EventFinancialOverview = { collected:number; refunded:number; netCollected:number; expenses:number; balance:number; plannedBudget:number; budgetActual:number; contingencyPercent:number; pendingPayments:number };
+export async function getManagedEvents(password:string):Promise<ManagedEvent[]> {
+  const r=await invokePartyApi<{events:ManagedEvent[]}>({action:"managed_events",password}); return r.events ?? [];
+}
+export async function createManagedEvent(password:string,input:{name:string;description?:string;location?:string;startsAt?:string|null;endsAt?:string|null;contingencyPercent?:number}):Promise<ManagedEvent> {
+  const r=await invokePartyApi<{event:ManagedEvent}>({action:"managed_event_create",password,...input}); return r.event;
+}
+export async function updateManagedEvent(password:string,eventId:string,input:Partial<Pick<ManagedEvent,"name"|"description"|"location"|"status">>&{startsAt?:string|null;endsAt?:string|null;contingencyPercent?:number}):Promise<ManagedEvent> {
+  const r=await invokePartyApi<{event:ManagedEvent}>({action:"managed_event_update",password,eventId,...input}); return r.event;
+}
+export async function getEventCollection<T=unknown>(password:string,eventId:string,collection:"event_pricing_rules"|"event_attendees"|"event_budget"|"event_payments"|"event_expenses"):Promise<T[]> {
+  const r=await invokePartyApi<{rows:T[]}>({action:collection,password,eventId}); return r.rows ?? [];
+}
+export async function saveEventPricingRules(password:string,eventId:string,rules:EventPricingRule[]):Promise<void> {
+  await invokePartyApi({action:"event_pricing_rules_save",password,eventId,rules});
+}
+export async function getEventFinancialOverview(password:string,eventId:string):Promise<EventFinancialOverview> {
+  const r=await invokePartyApi<{overview:EventFinancialOverview}>({action:"event_financial_overview",password,eventId}); return r.overview;
+}
+export async function addEventAttendee(password:string,input:{eventId:string;displayName:string;attendeeType:EventPricingRule["attendeeType"];responsibleAttendeeId?:string;participantId?:string;birthDate?:string;ageAtEvent?:number;quantity?:number;notes?:string}) {
+  return invokePartyApi({action:"event_attendee_add",password,...input});
+}
+export async function saveEventBudgetItem(password:string,input:{eventId:string;id?:string;category:"venue"|"food"|"drinks"|"decoration"|"entertainment"|"transport"|"other";description:string;plannedAmount:number;actualAmount?:number}) {
+  return invokePartyApi({action:"event_budget_save",password,...input});
+}
+export async function addEventPayment(password:string,input:{eventId:string;attendeeId?:string;payerName:string;amount:number;method:"pix"|"cash"|"transfer"|"card"|"other";status?:"pending"|"confirmed";notes?:string}) {
+  return invokePartyApi({action:"event_payment_add",password,...input});
+}
+export async function addEventExpense(password:string,input:{eventId:string;budgetItemId?:string;description:string;amount:number;paidBy:string;notes?:string}) {
+  return invokePartyApi({action:"event_expense_add",password,...input});
+}
+export async function addEventRefund(password:string,input:{eventId:string;paymentId:string;amount:number;reason:string}) {
+  return invokePartyApi({action:"event_refund_add",password,...input});
+}
