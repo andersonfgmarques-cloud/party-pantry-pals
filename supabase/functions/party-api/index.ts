@@ -459,9 +459,8 @@ Deno.serve(async (req) => {
       for (const r of rows) if (!["couple","individual","child","extra_guest"].includes(String(r.attendee_type)) || !str(r.label,80) || !["free","half","fixed","standard"].includes(String(r.charge_mode)) || !Number.isFinite(r.amount) || Number(r.amount)<0 || (r.attendee_type==="child" && (!Number.isInteger(r.age_min) || !Number.isInteger(r.age_max) || Number(r.age_min)<0 || Number(r.age_max)>120 || Number(r.age_max)<Number(r.age_min)))) return json({ error: "Confira tipo, faixa etária e valor de cada regra." }, 400);
       const childBands = rows.filter(r=>r.attendee_type==="child" && r.active).sort((a,b)=>Number(a.age_min)-Number(b.age_min));
       for (let i=1;i<childBands.length;i++) if (Number(childBands[i].age_min)<=Number(childBands[i-1].age_max)) return json({ error: "As faixas etárias infantis não podem se sobrepor." }, 400);
-      const { error: deleteError } = await db.from("party_event_pricing_rules").delete().eq("event_id", body.eventId);
-      if (deleteError) throw deleteError;
-      if (rows.length) { const { error } = await db.from("party_event_pricing_rules").insert(rows); if (error) throw error; }
+      const { error } = await db.rpc("party_event_replace_pricing_rules", { p_event_id: body.eventId, p_rules: body.rules });
+      if (error) throw error;
       return json({ ok: true });
     }
     if (action === "event_attendee_add") {
