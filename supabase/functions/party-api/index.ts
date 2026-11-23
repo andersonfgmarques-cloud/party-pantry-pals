@@ -504,15 +504,13 @@ Deno.serve(async (req) => {
     }
     if (action === "event_refund_add") {
       if (!uuid(body.eventId) || !uuid(body.paymentId) || !Number.isFinite(body.amount) || body.amount<=0 || !str(body.reason,300)) return json({ error: "Informe pagamento, valor e motivo do estorno." }, 400);
-      const { data: payment, error: paymentError } = await db.from("party_event_payments").select("amount,event_id").eq("id",body.paymentId).single();
-      if (paymentError || !payment || payment.event_id!==body.eventId) return json({ error: "Pagamento não encontrado neste evento." }, 404);
-      const { data: prior, error: priorError } = await db.from("party_event_refunds").select("amount").eq("payment_id",body.paymentId);
-      if (priorError) throw priorError;
-      const already = (prior ?? []).reduce((n,r)=>n+Number(r.amount),0);
-      if (already + body.amount > Number(payment.amount)) return json({ error: "O estorno excede o valor ainda disponível do pagamento." }, 400);
-      const { data, error } = await db.from("party_event_refunds").insert({ event_id: body.eventId, payment_id: body.paymentId, amount: body.amount, reason: body.reason.trim() }).select("*").single();
-      if (error) throw error;
-      return json({ refund: data });
+      const { data, error } = await db.rpc("party_event_add_refund", { p_event_id: body.eventId, p_payment_id: body.paymentId, p_amount: body.amount, p_reason: body.reason.trim() });
+      if (error) {
+        if (error.message.includes("Pagamento não encontrado")) return json({ error: error.message }, 404);
+        if (error.message.includes("excede") || error.message.includes("valor e motivo")) return json({ error: error.message }, 400);
+        throw error;
+      }
+      return json({ refund: Array.isArray(data) ? data[0] : data });
     }
     if (action === "participant_delete") {
       if (!admin || !uuid(body.id)) return json({ error: "Ação exclusiva do organizador ou participante inválido." }, 403);
