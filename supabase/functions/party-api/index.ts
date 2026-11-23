@@ -287,7 +287,7 @@ Deno.serve(async (req) => {
     }
     const admin = typeof body.password === "string" && safeEqual(body.password, organizerPassword);
     // Every organizer-only action must pass the same IP-based rate limiter.
-    const adminActions = ["add", "edit", "delete", "received", "event", "event_location", "verify", "participants", "audit_history", "expenses", "expense_add", "expense_delete", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete", "contribution_overview", "family_assign", "product_reference_price"];
+    const adminActions = ["add", "edit", "delete", "received", "event", "event_location", "verify", "participants", "audit_history", "expenses", "expense_add", "expense_delete", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete", "contribution_overview", "family_assign", "product_reference_price", "managed_events", "managed_event_create", "managed_event_update", "event_pricing_rules", "event_pricing_rules_save", "event_attendees", "event_attendee_add", "event_budget", "event_budget_save", "event_payments", "event_payment_add", "event_expenses", "event_expense_add", "event_refund_add", "event_financial_overview"];
     if (adminActions.includes(action)) {
       const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
       const clientIp = req.headers.get("cf-connecting-ip")?.trim()
@@ -404,6 +404,103 @@ Deno.serve(async (req) => {
       return json({ ok: true });
     }
 
+    // Multi-event management API. All actions are organizer-gated above and use service-role access.
+    if (action === "managed_events") {
+      const { data, error } = await db.from("party_managed_events").select("*").order("created_at", { ascending: false });
+      if (error) throw error;
+      return json({ events: data ?? [] });
+    }
+    if (action === "managed_event_create") {
+      if (!str(body.name, 120) || body.name.trim().length < 2) return json({ error: "Informe o nome do evento." }, 400);
+      const payload = { name: body.name.trim(), description: str(body.description, 1000) ? body.description.trim() : null, location: str(body.location, 300) ? body.location.trim() : null, starts_at: typeof body.startsAt === "string" ? body.startsAt : null, ends_at: typeof body.endsAt === "string" ? body.endsAt : null, contingency_percent: Number.isFinite(body.contingencyPercent) && body.contingencyPercent >= 0 && body.contingencyPercent <= 100 ? body.contingencyPercent : 0, status: "planning" };
+      const { data, error } = await db.from("party_managed_events").insert(payload).select("*").single();
+      if (error) throw error;
+      return json({ event: data });
+    }
+    if (action === "managed_event_update") {
+      if (!uuid(body.eventId)) return json({ error: "Evento inválido." }, 400);
+      const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (str(body.name, 120)) patch.name = body.name.trim();
+      if (body.description === null || str(body.description, 1000)) patch.description = body.description?.trim() ?? null;
+      if (body.location === null || str(body.location, 300)) patch.location = body.location?.trim() ?? null;
+      if (body.startsAt === null || typeof body.startsAt === "string") patch.starts_at = body.startsAt;
+      if (body.endsAt === null || typeof body.endsAt === "string") patch.ends_at = body.endsAt;
+      if (["planning","active","completed","cancelled"].includes(body.status)) patch.status = body.status;
+      if (Number.isFinite(body.contingencyPercent) && body.contingencyPercent >= 0 && body.contingencyPercent <= 100) patch.contingency_percent = body.contingencyPercent;
+      const { data, error } = await db.from("party_managed_events").update(patch).eq("id", body.eventId).select("*").single();
+      if (error) throw error;
+      return json({ event: data });
+    }
+    if (action === "event_pricing_rules" || action === "event_attendees" || action === "event_budget" || action === "event_payments" || action === "event_expenses" || action === "event_financial_overview") {
+      if (!uuid(body.eventId)) return json({ error: "Selecione um evento válido." }, 400);
+      const table = action === "event_pricing_rules" ? "party_event_pricing_rules" : action === "event_attendees" ? "party_event_attendees" : action === "event_budget" ? "party_event_budget_items" : action === "event_payments" ? "party_event_payments" : action === "event_expenses" ? "party_event_expenses" : null;
+      if (action === "event_financial_overview") {
+        const [payments, expenses, refunds, budget, event] = await Promise.all([
+          db.from("party_event_payments").select("amount,status").eq("event_id", body.eventId),
+          db.from("party_event_expenses").select("amount").eq("event_id", body.eventId),
+          db.from("party_event_refunds").select("amount").eq("event_id", body.eventId),
+          db.from("party_event_budget_items").select("planned_amount,actual_amount").eq("event_id", body.eventId),
+          db.from("party_managed_events").select("contingency_percent").eq("id", body.eventId).single(),
+        ]);
+        for (const q of [payments, expenses, refunds, budget, event]) if (q.error) throw q.error;
+        const sum = (rows: {amount?:number;planned_amount?:number;actual_amount?:number}[] | null, key: "amount"|"planned_amount"|"actual_amount") => (rows ?? []).reduce((n,r)=>n+Number(r[key] ?? 0),0);
+        const collected = (payments.data ?? []).filter(p=>p.status==="confirmed").reduce((n,p)=>n+Number(p.amount),0);
+        const refunded = sum(refunds.data,"amount"), spent = sum(expenses.data,"amount");
+        const planned = sum(budget.data,"planned_amount"), budgetActual = sum(budget.data,"actual_amount");
+        return json({ overview: { collected, refunded, netCollected: collected-refunded, expenses: spent, balance: collected-refunded-spent, plannedBudget: planned, budgetActual, contingencyPercent: Number(event.data.contingency_percent), pendingPayments: (payments.data ?? []).filter(p=>p.status==="pending").reduce((n,p)=>n+Number(p.amount),0) } });
+      }
+      const { data, error } = await db.from(table!).select("*").eq("event_id", body.eventId).order("created_at", { ascending: false });
+      if (error) throw error;
+      return json({ rows: data ?? [] });
+    }
+    if (action === "event_pricing_rules_save") {
+      if (!uuid(body.eventId) || !Array.isArray(body.rules) || body.rules.length > 40) return json({ error: "Regras de cobrança inválidas." }, 400);
+      const rows = body.rules.map((r: Record<string, unknown>) => ({ event_id: body.eventId, attendee_type: r.attendeeType, label: r.label, age_min: r.ageMin ?? null, age_max: r.ageMax ?? null, charge_mode: r.chargeMode, amount: r.amount ?? 0, active: r.active !== false, sort_order: Number.isInteger(r.sortOrder) ? r.sortOrder : 0 }));
+      for (const r of rows) if (!["couple","individual","child","extra_guest"].includes(String(r.attendee_type)) || !str(r.label,80) || !["free","half","fixed","standard"].includes(String(r.charge_mode)) || !Number.isFinite(r.amount) || Number(r.amount)<0 || (r.attendee_type==="child" && (!Number.isInteger(r.age_min) || !Number.isInteger(r.age_max) || Number(r.age_min)<0 || Number(r.age_max)<Number(r.age_min)))) return json({ error: "Confira tipo, faixa etária e valor de cada regra." }, 400);
+      const { error: deleteError } = await db.from("party_event_pricing_rules").delete().eq("event_id", body.eventId);
+      if (deleteError) throw deleteError;
+      if (rows.length) { const { error } = await db.from("party_event_pricing_rules").insert(rows); if (error) throw error; }
+      return json({ ok: true });
+    }
+    if (action === "event_attendee_add") {
+      if (!uuid(body.eventId) || !str(body.displayName,100) || !["couple","individual","child","extra_guest"].includes(body.attendeeType)) return json({ error: "Dados do participante inválidos." }, 400);
+      if (body.attendeeType === "child" && !uuid(body.responsibleAttendeeId)) return json({ error: "Vincule a criança a um responsável." }, 400);
+      const { data, error } = await db.from("party_event_attendees").insert({ event_id: body.eventId, display_name: body.displayName.trim(), attendee_type: body.attendeeType, responsible_attendee_id: body.responsibleAttendeeId ?? null, participant_id: uuid(body.participantId) ? body.participantId : null, birth_date: body.birthDate ?? null, age_at_event: Number.isInteger(body.ageAtEvent) ? body.ageAtEvent : null, quantity: Number.isInteger(body.quantity) && body.quantity>0 && body.quantity<=20 ? body.quantity : 1, notes: str(body.notes,1000) ? body.notes : null }).select("*").single();
+      if (error) throw error;
+      return json({ attendee: data });
+    }
+    if (action === "event_budget_save") {
+      if (!uuid(body.eventId) || !str(body.description,160) || !["venue","food","drinks","decoration","entertainment","transport","other"].includes(body.category) || !Number.isFinite(body.plannedAmount) || body.plannedAmount<0 || !Number.isFinite(body.actualAmount ?? 0) || (body.actualAmount ?? 0)<0) return json({ error: "Confira categoria, descrição e valores do orçamento." }, 400);
+      const payload = { event_id: body.eventId, category: body.category, description: body.description.trim(), planned_amount: body.plannedAmount, actual_amount: body.actualAmount ?? 0 };
+      const query = uuid(body.id) ? db.from("party_event_budget_items").update(payload).eq("id",body.id) : db.from("party_event_budget_items").insert(payload);
+      const { data, error } = await query.select("*").single();
+      if (error) throw error;
+      return json({ item: data });
+    }
+    if (action === "event_payment_add") {
+      if (!uuid(body.eventId) || !str(body.payerName,100) || !Number.isFinite(body.amount) || body.amount<=0 || !["pix","cash","transfer","card","other"].includes(body.method)) return json({ error: "Informe pagador, valor e forma de pagamento válidos." }, 400);
+      const { data, error } = await db.from("party_event_payments").insert({ event_id: body.eventId, attendee_id: uuid(body.attendeeId) ? body.attendeeId : null, payer_name: body.payerName.trim(), amount: body.amount, method: body.method, status: body.status==="pending" ? "pending" : "confirmed", paid_at: body.status==="pending" ? null : new Date().toISOString(), notes: str(body.notes,1000) ? body.notes : null }).select("*").single();
+      if (error) throw error;
+      return json({ payment: data });
+    }
+    if (action === "event_expense_add") {
+      if (!uuid(body.eventId) || !str(body.description,160) || !str(body.paidBy,100) || !Number.isFinite(body.amount) || body.amount<=0) return json({ error: "Informe descrição, responsável e valor da despesa." }, 400);
+      const { data, error } = await db.from("party_event_expenses").insert({ event_id: body.eventId, budget_item_id: uuid(body.budgetItemId) ? body.budgetItemId : null, description: body.description.trim(), amount: body.amount, paid_by: body.paidBy.trim(), notes: str(body.notes,1000) ? body.notes : null }).select("*").single();
+      if (error) throw error;
+      return json({ expense: data });
+    }
+    if (action === "event_refund_add") {
+      if (!uuid(body.eventId) || !uuid(body.paymentId) || !Number.isFinite(body.amount) || body.amount<=0 || !str(body.reason,300)) return json({ error: "Informe pagamento, valor e motivo do estorno." }, 400);
+      const { data: payment, error: paymentError } = await db.from("party_event_payments").select("amount,event_id").eq("id",body.paymentId).single();
+      if (paymentError || !payment || payment.event_id!==body.eventId) return json({ error: "Pagamento não encontrado neste evento." }, 404);
+      const { data: prior, error: priorError } = await db.from("party_event_refunds").select("amount").eq("payment_id",body.paymentId);
+      if (priorError) throw priorError;
+      const already = (prior ?? []).reduce((n,r)=>n+Number(r.amount),0);
+      if (already + body.amount > Number(payment.amount)) return json({ error: "O estorno excede o valor ainda disponível do pagamento." }, 400);
+      const { data, error } = await db.from("party_event_refunds").insert({ event_id: body.eventId, payment_id: body.paymentId, amount: body.amount, reason: body.reason.trim() }).select("*").single();
+      if (error) throw error;
+      return json({ refund: data });
+    }
     if (action === "participant_delete") {
       if (!admin || !uuid(body.id)) return json({ error: "Ação exclusiva do organizador ou participante inválido." }, 403);
       const { data: target, error: lookupError } = await db.from("party_participants").select("id,name").eq("id", body.id).maybeSingle();
