@@ -40,8 +40,11 @@ export function validateChildAgeRanges(rules: EventPricingRuleInput[]): string[]
     }
   }
   for (let i = 1; i < children.length; i++) {
-    if ((children[i].ageMin ?? -1) <= (children[i - 1].ageMax ?? -1)) {
-      errors.push(`As faixas infantis "${children[i - 1].label}" e "${children[i].label}" se sobrepõem.`);
+    const current = children[i];
+    const previous = children[i - 1];
+    if (!current || !previous) continue;
+    if ((current.ageMin ?? -1) <= (previous.ageMax ?? -1)) {
+      errors.push(`As faixas infantis "${previous.label}" e "${current.label}" se sobrepõem.`);
     }
   }
   return errors;
