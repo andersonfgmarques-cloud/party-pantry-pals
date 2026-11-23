@@ -120,3 +120,52 @@ revoke all on public.party_managed_events, public.party_event_pricing_rules, pub
 insert into public.party_managed_events (legacy_event_id, name, status)
 select id, name, 'active' from public.party_event where id = 1
 on conflict (legacy_event_id) do nothing;
+
+-- Serialize refunds per payment so concurrent requests cannot over-refund.
+create or replace function public.party_event_add_refund(
+  p_event_id uuid,
+  p_payment_id uuid,
+  p_amount numeric,
+  p_reason text
+)
+returns setof public.party_event_refunds
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_payment_amount numeric(12,2);
+  v_refunded numeric(12,2);
+  v_refund public.party_event_refunds;
+begin
+  if p_amount is null or p_amount <= 0 or p_reason is null or char_length(trim(p_reason)) < 2 or char_length(trim(p_reason)) > 300 then
+    raise exception 'Informe um valor e motivo válidos para o estorno.';
+  end if;
+
+  select amount into v_payment_amount
+  from public.party_event_payments
+  where id = p_payment_id and event_id = p_event_id
+  for update;
+
+  if not found then
+    raise exception 'Pagamento não encontrado neste evento.';
+  end if;
+
+  select coalesce(sum(amount), 0) into v_refunded
+  from public.party_event_refunds
+  where payment_id = p_payment_id;
+
+  if v_refunded + p_amount > v_payment_amount then
+    raise exception 'O estorno excede o valor ainda disponível do pagamento.';
+  end if;
+
+  insert into public.party_event_refunds(event_id, payment_id, amount, reason)
+  values (p_event_id, p_payment_id, p_amount, trim(p_reason))
+  returning * into v_refund;
+
+  return next v_refund;
+end;
+$$;
+
+revoke all on function public.party_event_add_refund(uuid, uuid, numeric, text) from public, anon, authenticated;
+grant execute on function public.party_event_add_refund(uuid, uuid, numeric, text) to service_role;
