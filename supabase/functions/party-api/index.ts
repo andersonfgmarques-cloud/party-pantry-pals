@@ -464,7 +464,12 @@ Deno.serve(async (req) => {
     }
     if (action === "event_attendee_add") {
       if (!uuid(body.eventId) || !str(body.displayName,100) || !["couple","individual","child","extra_guest"].includes(body.attendeeType)) return json({ error: "Dados do participante inválidos." }, 400);
-      if (body.attendeeType === "child" && !uuid(body.responsibleAttendeeId)) return json({ error: "Vincule a criança a um responsável." }, 400);
+      if (body.attendeeType === "child") {
+        if (!uuid(body.responsibleAttendeeId)) return json({ error: "Vincule a criança a um responsável." }, 400);
+        const { data: responsible, error: responsibleError } = await db.from("party_event_attendees").select("id,attendee_type").eq("id",body.responsibleAttendeeId).eq("event_id",body.eventId).maybeSingle();
+        if (responsibleError) throw responsibleError;
+        if (!responsible || responsible.attendee_type === "child") return json({ error: "O responsável deve ser um adulto cadastrado neste mesmo evento." }, 400);
+      }
       const { data, error } = await db.from("party_event_attendees").insert({ event_id: body.eventId, display_name: body.displayName.trim(), attendee_type: body.attendeeType, responsible_attendee_id: body.responsibleAttendeeId ?? null, participant_id: uuid(body.participantId) ? body.participantId : null, birth_date: body.birthDate ?? null, age_at_event: Number.isInteger(body.ageAtEvent) ? body.ageAtEvent : null, quantity: Number.isInteger(body.quantity) && body.quantity>0 && body.quantity<=20 ? body.quantity : 1, notes: str(body.notes,1000) ? body.notes : null }).select("*").single();
       if (error) throw error;
       return json({ attendee: data });
@@ -479,7 +484,13 @@ Deno.serve(async (req) => {
     }
     if (action === "event_payment_add") {
       if (!uuid(body.eventId) || !str(body.payerName,100) || !Number.isFinite(body.amount) || body.amount<=0 || !["pix","cash","transfer","card","other"].includes(body.method)) return json({ error: "Informe pagador, valor e forma de pagamento válidos." }, 400);
-      const { data, error } = await db.from("party_event_payments").insert({ event_id: body.eventId, attendee_id: uuid(body.attendeeId) ? body.attendeeId : null, payer_name: body.payerName.trim(), amount: body.amount, method: body.method, status: body.status==="pending" ? "pending" : "confirmed", paid_at: body.status==="pending" ? null : new Date().toISOString(), notes: str(body.notes,1000) ? body.notes : null }).select("*").single();
+      if (body.attendeeId !== undefined) {
+        if (!uuid(body.attendeeId)) return json({ error: "Participante do pagamento inválido." }, 400);
+        const { data: attendee, error: attendeeError } = await db.from("party_event_attendees").select("id").eq("id",body.attendeeId).eq("event_id",body.eventId).maybeSingle();
+        if (attendeeError) throw attendeeError;
+        if (!attendee) return json({ error: "O participante deve pertencer ao mesmo evento do pagamento." }, 400);
+      }
+      const { data, error } = await db.from("party_event_payments").insert({ event_id: body.eventId, attendee_id: body.attendeeId ?? null, payer_name: body.payerName.trim(), amount: body.amount, method: body.method, status: body.status==="pending" ? "pending" : "confirmed", paid_at: body.status==="pending" ? null : new Date().toISOString(), notes: str(body.notes,1000) ? body.notes : null }).select("*").single();
       if (error) throw error;
       return json({ payment: data });
     }
