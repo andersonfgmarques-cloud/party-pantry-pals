@@ -6,7 +6,10 @@ const childRules: EventPricingRuleInput[] = [
   { attendeeType: "child", label: "De 6 a 11 anos", ageMin: 6, ageMax: 11, chargeMode: "half", amount: 0 },
 ];
 
-const firstChildRule = childRules[0]!;\nconst secondChildRule = childRules[1]!;\n\ndescribe("Cobrança por evento", () => {
+const firstChildRule = childRules[0]!;
+const secondChildRule = childRules[1]!;
+
+describe("Cobrança por evento", () => {
   it("considera os limites etários inclusivos", () => {
     expect(findEventPricingRule(childRules, "child", 5)?.label).toBe("Até 5 anos");
     expect(findEventPricingRule(childRules, "child", 6)?.label).toBe("De 6 a 11 anos");
