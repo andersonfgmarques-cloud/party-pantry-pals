@@ -178,6 +178,18 @@ export async function addEventPayment(password:string,input:{eventId:string;atte
 export async function addEventExpense(password:string,input:{eventId:string;budgetItemId?:string;description:string;amount:number;paidBy:string;notes?:string}) {
   return invokePartyApi({action:"event_expense_add",password,...input});
 }
+export async function uploadEventReceipt(password:string,eventId:string,recordType:"payment"|"expense",recordId:string,file:File):Promise<void> {
+  const allowed=["application/pdf","image/jpeg","image/png","image/webp"];
+  if(!allowed.includes(file.type)||file.size<=0||file.size>10*1024*1024) throw new Error("Envie PDF, JPG, PNG ou WEBP de até 10 MB.");
+  const signed=await invokePartyApi<{path:string;token:string}>({action:"receipt_upload_url",password,eventId,recordType,recordId,fileName:file.name,contentType:file.type,fileSize:file.size});
+  const {error}=await supabase.storage.from("festou-private-receipts").uploadToSignedUrl(signed.path,signed.token,file,{contentType:file.type,upsert:false});
+  if(error) throw new Error(error.message||"Falha ao enviar comprovante.");
+  await invokePartyApi({action:"receipt_attach",password,eventId,recordType,recordId,path:signed.path});
+}
+export async function getEventReceiptUrl(password:string,eventId:string,recordType:"payment"|"expense",recordId:string):Promise<string> {
+  const result=await invokePartyApi<{signedUrl:string}>({action:"receipt_download_url",password,eventId,recordType,recordId});
+  return result.signedUrl;
+}
 export async function addEventRefund(password:string,input:{eventId:string;paymentId:string;amount:number;reason:string}) {
   return invokePartyApi({action:"event_refund_add",password,...input});
 }
