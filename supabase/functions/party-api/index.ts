@@ -287,7 +287,7 @@ Deno.serve(async (req) => {
     }
     const admin = typeof body.password === "string" && safeEqual(body.password, organizerPassword);
     // Every organizer-only action must pass the same IP-based rate limiter.
-    const adminActions = ["add", "edit", "delete", "received", "event", "event_location", "verify", "participants", "audit_history", "expenses", "expense_add", "expense_delete", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete", "contribution_overview", "family_assign", "product_reference_price", "managed_events", "managed_event_create", "managed_event_update", "event_pricing_rules", "event_pricing_rules_save", "event_attendees", "event_attendee_add", "event_budget", "event_budget_save", "event_payments", "event_payment_add", "event_expenses", "event_expense_add", "event_refund_add", "event_financial_overview"];
+    const adminActions = ["add", "edit", "delete", "received", "event", "event_location", "verify", "participants", "audit_history", "expenses", "expense_add", "expense_delete", "birthday_add", "birthday_edit", "birthday_delete", "participant_delete", "contribution_overview", "family_assign", "product_reference_price", "managed_events", "managed_event_create", "managed_event_update", "event_pricing_rules", "event_pricing_rules_save", "event_attendees", "event_attendee_add", "event_budget", "event_budget_save", "event_payments", "event_payment_add", "event_expenses", "event_expense_add", "event_refund_add", "event_financial_overview", "receipt_upload_url", "receipt_attach", "receipt_download_url"];
     if (adminActions.includes(action)) {
       const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
       const clientIp = req.headers.get("cf-connecting-ip")?.trim()
@@ -329,6 +329,50 @@ Deno.serve(async (req) => {
         });
         if (resetError) throw resetError;
       }
+    }
+    if (action === "receipt_upload_url") {
+      if (!admin || !uuid(body.eventId) || !uuid(body.recordId) || !["payment", "expense"].includes(body.recordType) ||
+          !str(body.fileName, 180) || !str(body.contentType, 80) ||
+          !["application/pdf", "image/jpeg", "image/png", "image/webp"].includes(body.contentType) ||
+          !Number.isInteger(body.fileSize) || body.fileSize <= 0 || body.fileSize > 10 * 1024 * 1024) {
+        return json({ error: "Arquivo inválido. Envie PDF, JPG, PNG ou WEBP de até 10 MB." }, 400);
+      }
+      const table = body.recordType === "payment" ? "party_event_payments" : "party_event_expenses";
+      const { data: record, error: recordError } = await db.from(table).select("id,event_id").eq("id", body.recordId).eq("event_id", body.eventId).maybeSingle();
+      if (recordError) throw recordError;
+      if (!record) return json({ error: "Lançamento não encontrado neste evento." }, 404);
+      const extension = body.contentType === "application/pdf" ? "pdf" : body.contentType === "image/jpeg" ? "jpg" : body.contentType === "image/png" ? "png" : "webp";
+      const path = `${body.eventId}/${body.recordType}/${body.recordId}/${crypto.randomUUID()}.${extension}`;
+      const { data, error } = await db.storage.from("festou-private-receipts").createSignedUploadUrl(path);
+      if (error) throw error;
+      return json({ path, token: data.token, signedUrl: data.signedUrl });
+    }
+    if (action === "receipt_attach") {
+      if (!admin || !uuid(body.eventId) || !uuid(body.recordId) || !["payment", "expense"].includes(body.recordType) || !str(body.path, 500)) {
+        return json({ error: "Vínculo do comprovante inválido." }, 400);
+      }
+      const prefix = `${body.eventId}/${body.recordType}/${body.recordId}/`;
+      if (!body.path.startsWith(prefix) || body.path.includes("..")) return json({ error: "Caminho do comprovante inválido." }, 400);
+      const table = body.recordType === "payment" ? "party_event_payments" : "party_event_expenses";
+      const { data: exists, error: existsError } = await db.storage.from("festou-private-receipts").list(prefix, { limit: 100 });
+      if (existsError) throw existsError;
+      const fileName = body.path.slice(prefix.length);
+      if (!(exists ?? []).some(file => file.name === fileName)) return json({ error: "O arquivo enviado não foi localizado." }, 404);
+      const { error } = await db.from(table).update({ receipt_path: body.path }).eq("id", body.recordId).eq("event_id", body.eventId);
+      if (error) throw error;
+      return json({ ok: true });
+    }
+    if (action === "receipt_download_url") {
+      if (!admin || !uuid(body.eventId) || !uuid(body.recordId) || !["payment", "expense"].includes(body.recordType)) {
+        return json({ error: "Solicitação de comprovante inválida." }, 400);
+      }
+      const table = body.recordType === "payment" ? "party_event_payments" : "party_event_expenses";
+      const { data: record, error: recordError } = await db.from(table).select("receipt_path").eq("id", body.recordId).eq("event_id", body.eventId).maybeSingle();
+      if (recordError) throw recordError;
+      if (!record?.receipt_path) return json({ error: "Este lançamento não possui comprovante." }, 404);
+      const { data, error } = await db.storage.from("festou-private-receipts").createSignedUrl(record.receipt_path, 300);
+      if (error) throw error;
+      return json({ signedUrl: data.signedUrl });
     }
     let participant: { id: string; name: string } | null = null;
     if (!admin) {
