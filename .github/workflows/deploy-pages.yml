@@ -1,8 +1,8 @@
-name: Deploy GitHub Pages
+name: Deploy production unchanged + Festou preview
 
 on:
   push:
-    branches: ["main"]
+    branches: ["feat/festou-multi-event-foundation"]
   workflow_dispatch:
 
 permissions:
@@ -18,26 +18,39 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout production source (main)
         uses: actions/checkout@v4
+        with:
+          ref: main
+          path: production
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
-      - name: Install dependencies
+      - name: Install production dependencies
+        working-directory: production
         run: bun install --frozen-lockfile
-      - name: Build static app
+      - name: Build current production site from main
+        working-directory: production
         run: bun run build
         env:
           GITHUB_ACTIONS: "true"
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-      - name: Add Pages metadata
-        run: touch dist/.nojekyll
+      - name: Checkout Festou preview source
+        uses: actions/checkout@v4
+        with:
+          ref: feat/festou-multi-event-foundation
+          path: preview-source
+      - name: Add isolated preview under /preview/
+        run: |
+          mkdir -p production/dist/preview
+          cp preview-source/public/preview/index.html production/dist/preview/index.html
+          touch production/dist/.nojekyll
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: production/dist
   deploy:
     environment:
       name: github-pages
@@ -45,6 +58,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Deploy to GitHub Pages
+      - name: Deploy production plus isolated preview
         id: deployment
         uses: actions/deploy-pages@v4
