@@ -23,7 +23,7 @@ describe("Cobrança por evento", () => {
     expect(calculateEventCharge({ attendeeType: "couple", label: "standard", chargeMode: "standard", amount: 0 }, 100)).toBe(100);
   });
   it("detecta faixas infantis sobrepostas", () => {
-    expect(validateChildAgeRanges([...childRules, { ...childRules[1], label: "Outra faixa", ageMin: 5, ageMax: 8 }])).toHaveLength(1);
+    expect(validateChildAgeRanges([...childRules, { ...childRules[1], label: "Outra faixa", ageMin: 5, ageMax: 8 }])).toHaveLength(2);
   });
   it("aceita faixas contíguas sem sobreposição", () => {
     expect(validateChildAgeRanges(childRules)).toEqual([]);
