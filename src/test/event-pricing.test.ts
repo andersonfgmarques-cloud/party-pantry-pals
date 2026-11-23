@@ -6,7 +6,7 @@ const childRules: EventPricingRuleInput[] = [
   { attendeeType: "child", label: "De 6 a 11 anos", ageMin: 6, ageMax: 11, chargeMode: "half", amount: 0 },
 ];
 
-describe("Cobrança por evento", () => {
+const firstChildRule = childRules[0]!;\nconst secondChildRule = childRules[1]!;\n\ndescribe("Cobrança por evento", () => {
   it("considera os limites etários inclusivos", () => {
     expect(findEventPricingRule(childRules, "child", 5)?.label).toBe("Até 5 anos");
     expect(findEventPricingRule(childRules, "child", 6)?.label).toBe("De 6 a 11 anos");
@@ -23,13 +23,13 @@ describe("Cobrança por evento", () => {
     expect(calculateEventCharge({ attendeeType: "couple", label: "standard", chargeMode: "standard", amount: 0 }, 100)).toBe(100);
   });
   it("detecta faixas infantis sobrepostas", () => {
-    expect(validateChildAgeRanges([...childRules, { ...childRules[1], label: "Outra faixa", ageMin: 5, ageMax: 8 }])).toHaveLength(2);
+    expect(validateChildAgeRanges([...childRules, { ...secondChildRule, label: "Outra faixa", ageMin: 5, ageMax: 8 }])).toHaveLength(2);
   });
   it("aceita faixas contíguas sem sobreposição", () => {
     expect(validateChildAgeRanges(childRules)).toEqual([]);
   });
   it("ignora regras desativadas na busca e na validação", () => {
-    const disabled = { ...childRules[0], active: false };
+    const disabled: EventPricingRuleInput = { ...firstChildRule, active: false };
     expect(findEventPricingRule([disabled], "child", 3)).toBeNull();
     expect(validateChildAgeRanges([disabled, ...childRules.slice(1)])).toEqual([]);
   });
