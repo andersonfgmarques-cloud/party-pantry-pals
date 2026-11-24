@@ -456,7 +456,7 @@ Deno.serve(async (req) => {
     }
     if (action === "managed_event_create") {
       if (!str(body.name, 120) || body.name.trim().length < 2) return json({ error: "Informe o nome do evento." }, 400);
-      const payload = { name: body.name.trim(), description: str(body.description, 1000) ? body.description.trim() : null, location: str(body.location, 300) ? body.location.trim() : null, starts_at: typeof body.startsAt === "string" ? body.startsAt : null, ends_at: typeof body.endsAt === "string" ? body.endsAt : null, contingency_percent: Number.isFinite(body.contingencyPercent) && body.contingencyPercent >= 0 && body.contingencyPercent <= 100 ? body.contingencyPercent : 0, status: "planning" };
+      const payload = { name: body.name.trim(), description: str(body.description, 1000) ? body.description.trim() : null, location: str(body.location, 300) ? body.location.trim() : null, starts_at: typeof body.startsAt === "string" ? body.startsAt : null, ends_at: typeof body.endsAt === "string" ? body.endsAt : null, contingency_percent: Number.isFinite(body.contingencyPercent) && body.contingencyPercent >= 0 && body.contingencyPercent <= 100 ? body.contingencyPercent : 0, standard_quota: Number.isFinite(body.standardQuota) && body.standardQuota >= 0 ? body.standardQuota : 0, status: "planning" };
       const { data, error } = await db.from("party_managed_events").insert(payload).select("*").single();
       if (error) throw error;
       return json({ event: data });
@@ -470,7 +470,7 @@ Deno.serve(async (req) => {
       if (body.startsAt === null || typeof body.startsAt === "string") patch.starts_at = body.startsAt;
       if (body.endsAt === null || typeof body.endsAt === "string") patch.ends_at = body.endsAt;
       if (["planning","active","completed","cancelled"].includes(body.status)) patch.status = body.status;
-      if (Number.isFinite(body.contingencyPercent) && body.contingencyPercent >= 0 && body.contingencyPercent <= 100) patch.contingency_percent = body.contingencyPercent;
+      if (Number.isFinite(body.contingencyPercent) && body.contingencyPercent >= 0 && body.contingencyPercent <= 100) patch.contingency_percent = body.contingencyPercent;\n      if (Number.isFinite(body.standardQuota) && body.standardQuota >= 0) patch.standard_quota = body.standardQuota;
       const { data, error } = await db.from("party_managed_events").update(patch).eq("id", body.eventId).select("*").single();
       if (error) throw error;
       return json({ event: data });
