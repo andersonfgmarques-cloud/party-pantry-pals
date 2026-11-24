@@ -50,7 +50,7 @@ jobs:
           GITHUB_ACTIONS: "true"
           VITE_FESTOU_PREVIEW: "true"
           VITE_ASSET_BASE: "/party-pantry-pals/preview/"
-          VITE_ROUTER_BASEPATH: "/party-pantry-pals/preview"
+          VITE_ROUTER_BASEPATH: "/party-pantry-pals"
       - name: Add isolated preview bundle under /preview/
         run: |
           mkdir -p production/dist/preview
