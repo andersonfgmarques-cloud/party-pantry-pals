@@ -481,7 +481,7 @@ Deno.serve(async (req) => {
       if (action === "event_financial_overview") {
         const [payments, expenses, refunds, budget, event] = await Promise.all([
           db.from("party_event_payments").select("amount,status").eq("event_id", body.eventId),
-          db.from("party_event_expenses").select("amount").eq("event_id", body.eventId),
+          db.from("party_event_expenses").select("amount,budget_item_id").eq("event_id", body.eventId),
           db.from("party_event_refunds").select("amount").eq("event_id", body.eventId),
           db.from("party_event_budget_items").select("planned_amount,actual_amount").eq("event_id", body.eventId),
           db.from("party_managed_events").select("contingency_percent").eq("id", body.eventId).single(),
@@ -490,7 +490,7 @@ Deno.serve(async (req) => {
         const sum = (rows: {amount?:number;planned_amount?:number;actual_amount?:number}[] | null, key: "amount"|"planned_amount"|"actual_amount") => (rows ?? []).reduce((n,r)=>n+Number(r[key] ?? 0),0);
         const collected = (payments.data ?? []).filter(p=>p.status==="confirmed").reduce((n,p)=>n+Number(p.amount),0);
         const refunded = sum(refunds.data,"amount"), spent = sum(expenses.data,"amount");
-        const planned = sum(budget.data,"planned_amount"), budgetActual = sum(budget.data,"actual_amount");
+        const planned = sum(budget.data,"planned_amount");\n        // Realised budget is derived from linked expense records, avoiding manually duplicated totals.\n        const budgetIds = new Set((budget.data ?? []).map(item => item.id));\n        const budgetActual = (expenses.data ?? []).filter(expense => expense.budget_item_id && budgetIds.has(expense.budget_item_id)).reduce((n, expense) => n + Number(expense.amount ?? 0), 0);
         return json({ overview: { collected, refunded, netCollected: collected-refunded, expenses: spent, balance: collected-refunded-spent, plannedBudget: planned, budgetActual, contingencyPercent: Number(event.data.contingency_percent), pendingPayments: (payments.data ?? []).filter(p=>p.status==="pending").reduce((n,p)=>n+Number(p.amount),0) } });
       }
       const { data, error } = await db.from(table!).select("*").eq("event_id", body.eventId).order("created_at", { ascending: false });
