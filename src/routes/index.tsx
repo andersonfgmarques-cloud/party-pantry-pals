@@ -14,6 +14,6 @@ export const Route = createFileRoute("/")({
     { name: 'twitter:card', content: 'summary_large_image' },
     { name: 'theme-color', content: '#21613f' },
   ] }),
-  component: () => isPreview ? <PreviewPage /> : <PartyList />,
+  component: PartyList,
 });
 
