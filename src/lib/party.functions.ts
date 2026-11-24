@@ -145,16 +145,16 @@ export async function getContributionOverview(password: string): Promise<Contrib
   return invokePartyApi<ContributionOverview>({ action: 'contribution_overview', password });
 }
 
-export type ManagedEvent = { id:string; legacy_event_id:number|null; name:string; description:string|null; starts_at:string|null; ends_at:string|null; location:string|null; status:"planning"|"active"|"completed"|"cancelled"; currency:string; contingency_percent:number; created_at:string; updated_at:string };
+export type ManagedEvent = { id:string; legacy_event_id:number|null; name:string; description:string|null; starts_at:string|null; ends_at:string|null; location:string|null; status:"planning"|"active"|"completed"|"cancelled"; currency:string; contingency_percent:number; standard_quota:number; created_at:string; updated_at:string };
 export type EventPricingRule = { id?:string; attendeeType:"couple"|"individual"|"child"|"extra_guest"; label:string; ageMin?:number|null; ageMax?:number|null; chargeMode:"free"|"half"|"fixed"|"standard"; amount:number; active?:boolean; sortOrder?:number };
 export type EventFinancialOverview = { collected:number; refunded:number; netCollected:number; expenses:number; balance:number; plannedBudget:number; budgetActual:number; contingencyPercent:number; pendingPayments:number };
 export async function getManagedEvents(password:string):Promise<ManagedEvent[]> {
   const r=await invokePartyApi<{events:ManagedEvent[]}>({action:"managed_events",password}); return r.events ?? [];
 }
-export async function createManagedEvent(password:string,input:{name:string;description?:string;location?:string;startsAt?:string|null;endsAt?:string|null;contingencyPercent?:number}):Promise<ManagedEvent> {
+export async function createManagedEvent(password:string,input:{name:string;description?:string;location?:string;startsAt?:string|null;endsAt?:string|null;contingencyPercent?:number;standardQuota?:number}):Promise<ManagedEvent> {
   const r=await invokePartyApi<{event:ManagedEvent}>({action:"managed_event_create",password,...input}); return r.event;
 }
-export async function updateManagedEvent(password:string,eventId:string,input:Partial<Pick<ManagedEvent,"name"|"description"|"location"|"status">>&{startsAt?:string|null;endsAt?:string|null;contingencyPercent?:number}):Promise<ManagedEvent> {
+export async function updateManagedEvent(password:string,eventId:string,input:Partial<Pick<ManagedEvent,"name"|"description"|"location"|"status">>&{startsAt?:string|null;endsAt?:string|null;contingencyPercent?:number;standardQuota?:number}):Promise<ManagedEvent> {
   const r=await invokePartyApi<{event:ManagedEvent}>({action:"managed_event_update",password,eventId,...input}); return r.event;
 }
 export async function getEventCollection<T=unknown>(password:string,eventId:string,collection:"event_pricing_rules"|"event_attendees"|"event_budget"|"event_payments"|"event_expenses"):Promise<T[]> {
