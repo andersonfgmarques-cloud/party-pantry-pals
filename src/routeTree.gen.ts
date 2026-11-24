@@ -10,6 +10,6 @@ export interface FileRoutesByTo { '/': typeof IndexRoute; '/preview': typeof Pre
 export interface FileRoutesById { __root__: typeof rootRouteImport; '/': typeof IndexRoute; '/preview': typeof PreviewRoute }
 export interface FileRouteTypes { fileRoutesByFullPath:FileRoutesByFullPath; fullPaths:'/'|'/preview'; fileRoutesByTo:FileRoutesByTo; to:'/'|'/preview'; id:'__root__'|'/'|'/preview'; fileRoutesById:FileRoutesById }
 export interface RootRouteChildren { IndexRoute:typeof IndexRoute; PreviewRoute:typeof PreviewRoute }
-declare module '@tanstack/react-router' { interface FileRoutesByPath { '/preview': { id:'/preview'; path:'/preview'; fullPath:'/preview'; preLoaderRoute:typeof PreviewRouteImport; parentRoute:typeof rootRouteImport } } }
+declare module '@tanstack/react-router' { interface FileRoutesByPath { '/': { id:'/'; path:'/'; fullPath:'/'; preLoaderRoute:typeof IndexRouteImport; parentRoute:typeof rootRouteImport }; '/preview': { id:'/preview'; path:'/preview'; fullPath:'/preview'; preLoaderRoute:typeof PreviewRouteImport; parentRoute:typeof rootRouteImport } } }
 const rootRouteChildren:RootRouteChildren={IndexRoute,PreviewRoute}
 export const routeTree=rootRouteImport._addFileChildren(rootRouteChildren)._addFileTypes<FileRouteTypes>()
