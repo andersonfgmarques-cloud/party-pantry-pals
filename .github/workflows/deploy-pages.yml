@@ -2,7 +2,7 @@ name: Deploy production unchanged + Festou preview
 
 on:
   push:
-    branches: ["main"]
+    branches: ["feat/festou-multi-event-foundation"]
   workflow_dispatch:
 
 permissions:

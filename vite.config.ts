@@ -4,7 +4,8 @@ import tailwindcss from "@tailwindcss/vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
-  base: process.env["GITHUB_ACTIONS"] ? "/party-pantry-pals/" : "/",
+  base:
+    process.env["VITE_ASSET_BASE"] ?? (process.env["GITHUB_ACTIONS"] ? "/party-pantry-pals/" : "/"),
   plugins: [tailwindcss(), react(), tsconfigPaths()],
   build: { outDir: "dist", emptyOutDir: true },
 });
